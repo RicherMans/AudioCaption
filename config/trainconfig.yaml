@@ -1,0 +1,45 @@
+dataloader_args:
+        batch_size: 32 
+        num_workers: 2
+        shuffle: True
+optimizer: Adam
+optimizer_args:
+        lr: 0.004
+        weight_decay: 0.0
+epochs: 20
+encodermodel: GRUEncoder
+encodermodel_args:
+        num_layers: 1
+        dropout: 0.0
+        embed_size: 256
+        # Enables the passing of the hidden encoder state to the decoder
+        use_hidden: False
+        # Can be time, mean ( for last timestep, mean reduction)
+        representation: mean
+        hidden_size: 512
+decodermodel: GRUDecoder
+decodermodel_args:
+        embed_size: 256
+        num_layers: 1
+        dropout: 0.3
+        hidden_size: 512
+feature_args:
+        cmvn: False
+        delta: False
+        splice: False
+scaler: StandardScaler # Can be any of sklearn.preprocessing that supports fit_partial
+scaler_args:
+        with_std : True
+        with_mean : True        
+improvecriterion: loss # Can also be acc | loss
+saveinterval: 1 #Save every N epochs to see what happened
+scheduler: ReduceLROnPlateau
+captions_file: data/labels/train.json
+scheduler_args:
+        mode: min
+        factor: 0.1
+        patience: 10
+        cooldown: 1
+        verbose: False
+        threshold: 0.001
+teacher_forcing_ratio: 1.0

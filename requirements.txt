@@ -1,0 +1,13 @@
+torch==0.4.1.post2
+numpy==1.15.0
+pandas==0.23.4
+tqdm==4.24.0
+zhon==1.1.5
+torchnet==0.0.4
+librosa==0.6.1
+nltk==3.3
+fire==0.1.3
+tableprint==0.8.0
+pywt==1.0.6
+scikit_learn==0.20.0
+PyYAML==3.13
