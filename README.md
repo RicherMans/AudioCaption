@@ -102,7 +102,7 @@ python train.py data/hospital_fbank.ark data/vocab.cn
 
 This script creates a new directory `ENCODERMODEL_DECODERMODEL/TIMESTAMP`. On a CPU the training might take about half an hour for one epoch ( we run by default for 20 ). On a GPU the training is much faster, approximately couple of minutes on a GTX1080.
 
-The training creates for each epoch one `model_EPOCH.th` file in the output directory. Finally after training finished, the script will use the best model (according to PPL) in order to generate sentences given some input features (by default data/labels/dev_cn.json)
+The training creates for each epoch one `model_EPOCH.th` file in the output directory. Finally after training finished, the script will use the best model (according to PPL) in order to generate sentences given some input features (by default the same that were used for training)
 
 ## Evaluating
 
@@ -118,5 +118,5 @@ python score.py data/hospital_fbank.ark GRUEncoder_GRUDecoder/SOMEPATH/model.th 
 
 ## Sampling
 
-Sampling is done by the `sample.py` script. It is ran by default
+Sampling is done by the `sample.py` script. It is ran by default after training finishes. 
 

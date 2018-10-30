@@ -31,44 +31,6 @@ def parsecopyfeats(feat, cmvn=False, delta=False, splice=None):
     return outstr
 
 
-def validate_bleu(dataloader, encodermodel,
-                  decodermodel, vocab, sample_length=20):
-    encodermodel = encodermodel.eval()
-    decodermodel = decodermodel.eval()
-    overall_bleu = 0
-    n_total = 0
-    with torch.no_grad():
-        for i, (features, captions, lengths) in enumerate(dataloader):
-            features = features.float().to(device)
-            captions = captions.long().to(device)
-            features, hiddens = encodermodel(features)
-            print(features.mean(1))
-            # Sampled ids: Batch x Len x 1
-            outputs = decodermodel(features, captions, lengths, state=hiddens)
-            targets = torch.nn.utils.rnn.pack_padded_sequence(
-                captions, lengths, batch_first=True)[0].cpu().numpy()
-            outputs = outputs.max(1)[1].cpu().numpy()
-            n_total += len(outputs)
-            # Convert word_ids to words
-            sampled_caption = []
-            for word_id in outputs:
-                word = vocab.idx2word[word_id]
-                if word == '<start>':
-                    continue
-                sampled_caption.append(word)
-                if word == '<end>':
-                    break
-            hypothesis = u" ".join(sampled_caption)
-            reference = u" ".join([vocab.idx2word[word_id]
-                                   for word_id in targets
-                                   if vocab.idx2word[word_id] != '<start>' or
-                                   vocab.idx2word[word_id] != '<end>'])
-            overall_bleu += sentence_bleu(reference,
-                                          hypothesis,
-                                          smoothing_function=SmoothingFunction().method3)
-    return overall_bleu/n_total
-
-
 def sample_cv(dataloader, encodermodel, decodermodel,
               criterion, sample_length: int = 20):
     """
@@ -186,6 +148,7 @@ def criterion_improver(mode):
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.manual_seed(1)
+
 
 def main(features: str, vocab_file: str,
          config='config/trainconfig.yaml', **kwargs):

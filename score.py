@@ -16,7 +16,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def score(data_path: str, encoder_path: str, vocab_path: str,
-          captions_file: str = "data/labels/dev_ch.json",
+          captions_file: str = "data/labels/dev_cn.json",
           sample_length: int = 50, N=4, smoothing='method1'):
     dump = torch.load(encoder_path, map_location=lambda storage, loc: storage)
     reference_df = pd.read_json(captions_file)
@@ -91,7 +91,6 @@ def score(data_path: str, encoder_path: str, vocab_path: str,
 
             human_bleu_score.append(human_bleu)
             bleu_score.append(bleu_score_all_ref)
-            human_bleu_score_std.append(np.std(human_bleu))
 
         print("BLEU-{} Scores".format(N))
         print("System {:10.3f}".format(np.mean(bleu_score)))
