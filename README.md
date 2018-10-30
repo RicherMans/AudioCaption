@@ -1,6 +1,6 @@
-# AudioCaption : Show and Tell
+# AudioCaption : Listen and Tell
 
-This repository provides the baseline model source code as well as the labels to the Paper [Audiocaption: Show and Tell]().
+This repository provides the baseline model source code as well as the labels to the Paper [Audiocaption: Listen and Tell]().
 
 Firstly please checkout this repository.
 
@@ -9,8 +9,8 @@ git clone https://www.github.com/Richermans/AudioCaption
 ```
 
 # Dataset
-
-The Audio dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
+The full AudioCaption dataset can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
+The audio of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
 
 A easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
 
