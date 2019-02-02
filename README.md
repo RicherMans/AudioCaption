@@ -1,6 +1,6 @@
 # AudioCaption : Listen and Tell
 
-This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper *Audiocaption: Listen and Tell*
+This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper **Audiocaption: Listen and Tell**
 
 Firstly please checkout this repository.
 
