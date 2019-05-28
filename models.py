@@ -208,6 +208,7 @@ class GRUEncoder(nn.Module):
         self.outputlayer = nn.Linear(
             hidden_size * (bidirectional + 1), embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
+        nn.init.kaiming_uniform_(self.outputlayer.weight)
 
     def forward(self, x):
         x, hid = self.network(x)
@@ -254,8 +255,14 @@ class GRUDecoder(nn.Module):
         hiddens, _ = self.model(packed, state)
         # padded_vals = nn.utils.rnn.pad_packed_sequence(hiddens, batch_first=True, padding_value= -100)
         # print(padded_vals)
-        outputs = self.classifier(hiddens[0])
-        return outputs
+        padded_data, lengths = nn.utils.rnn.pad_packed_sequence(hiddens, batch_first=True)
+        batch_size = len(lengths)
+        sentence_ouputs = torch.zeros(batch_size, padded_data.shape[-1])
+        for i in range(batch_size):
+            length = lengths[i]
+            sentence_ouputs[i] = torch.mean(padded_data[i, :length, :], dim=0)
+        words_outputs = self.classifier(hiddens[0])
+        return words_outputs, sentence_ouputs
 
 
     def sample(self, feature, states=None, maxlength=20, return_probs=False):

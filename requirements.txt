@@ -11,3 +11,5 @@ librosa==0.6.1
 pywt==1.0.6
 scikit_learn==0.20.0
 PyYAML==3.13
+bert-serving-server==1.8.3
+bert-serving-client==1.8.3

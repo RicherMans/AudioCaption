@@ -9,6 +9,7 @@ from train import parsecopyfeats
 import tableprint as tp
 from contextlib import contextmanager
 import sys
+import pandas as pd
 
 # Device configuration
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,7 +31,7 @@ def stdout_or_file(buf=None):
 
 
 def sample(data_path: str, encoder_path: str,
-         vocab_path: str, sample_length: int = 30, output: str = None):
+        vocab_path: str, sample_length: int = 30, output: str = None, ch: bool = True):
     dump = torch.load(encoder_path, map_location=lambda storage, loc: storage)
     encodermodel = dump['encodermodel']
     decodermodel = dump['decodermodel']
@@ -40,8 +41,8 @@ def sample(data_path: str, encoder_path: str,
     config_parameters = dump['config']
 
     vocab = torch.load(vocab_path)
-    print(encodermodel)
-    print(decodermodel)
+    # print(encodermodel)
+    # print(decodermodel)
     # load images from previous
     encodermodel = encodermodel.to(DEVICE).eval()
     decodermodel = decodermodel.to(DEVICE).eval()
@@ -49,13 +50,18 @@ def sample(data_path: str, encoder_path: str,
     kaldi_string = parsecopyfeats(
         data_path, **config_parameters['feature_args'])
     width_length = sample_length * 4
+
+
     with stdout_or_file(output) as writer:
         writer.write(
             tp.header(
                 ["InputUtterance", "Output Sentence"],
                 style='grid', width=width_length))
         writer.write('\n')
+
+        sentences = set()
         for k, features in kaldi_io.read_mat_ark(kaldi_string):
+
             features = scaler.transform(features)
             # Add single batch dimension
             features = torch.from_numpy(features).to(DEVICE).unsqueeze(0)
@@ -72,13 +78,21 @@ def sample(data_path: str, encoder_path: str,
                 sampled_caption.append(word)
                 if word == '<end>':
                    break
-            sentence = ''.join(sampled_caption)
+            if ch:
+                sentence = ''.join(sampled_caption)
+            else:
+                sentence = ' '.join(sampled_caption)
+
+            sentences.add(sentence)
 
             # Print out the image and the generated caption
             writer.write(tp.row([k, sentence], style='grid', width=width_length))
             writer.write('\n')
             writer.flush()
         writer.write(tp.bottom(2, style='grid', width=width_length))
+        writer.write('\n')
+        writer.write('Number of unique sentences: ' + str(len(sentences)))
+
 
 
 if __name__ == '__main__':

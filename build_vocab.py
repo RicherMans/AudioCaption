@@ -29,32 +29,48 @@ class Vocabulary(object):
     def __len__(self):
         return len(self.word2idx)
 
-def build_vocab(csv:str, threshold:int, keeppunctuation: bool, host_address:str, character_level:bool=False ):
+def build_vocab(json:str, threshold:int, keeppunctuation: bool, host_address:str, character_level:bool=False, zh:bool=True ):
     """Build vocabulary from csv file with a given threshold to drop all counts < threshold
 
     Args:
         csv (string): Input csv file. Needs to be tab separated and having a column named 'caption'
+        
+        Modiefied:
+        json(string): Input json file. Shoud have a column named 'caption'
         threshold (int): Threshold to drop all words with counts < threshold
         keeppunctuation (bool): Includes or excludes punctuation.
 
     Returns:
         vocab (Vocab): Object with the processed vocabulary
     """
-
-    parser = CoreNLPParser(host_address)
-
-    df = pd.read_csv(csv, sep='\t')
+    #df = pd.read_csv(csv, sep='\t')
+    df = pd.read_json(json)
     counter = Counter()
-    for i in tqdm(range(len(df)), leave=False):
-        caption = str(df.loc[i]['caption'])
-        # Remove all punctuations
-        if not keeppunctuation:
-            caption = re.sub("[{}]".format(punctuation),"",caption)
-        if character_level:
-            tokens = list(caption)
-        else:
-            tokens = list(parser.tokenize(caption))
-        counter.update(tokens)
+    
+    if zh:
+        parser = CoreNLPParser(host_address)
+        for i in tqdm(range(len(df)), leave=False):
+            caption = str(df.loc[i]['caption'])
+            # Remove all punctuations
+            if not keeppunctuation:
+                caption = re.sub("[{}]".format(punctuation),"",caption)
+            if character_level:
+                tokens = list(caption)
+            else:
+                tokens = list(parser.tokenize(caption))
+            counter.update(tokens)
+    else:
+        punctuation = ',.()'
+        for i in tqdm(range(len(df)), leave=False):
+            caption = str(df.loc[i]['caption'])
+            # Remove all punctuations
+            if not keeppunctuation:
+                caption = re.sub("[{}]".format(punctuation),"",caption)
+            if character_level:
+                tokens = list(caption)
+            else:
+                tokens = caption.split()
+            counter.update(tokens)
 
     words = [word for word, cnt in counter.items() if cnt >= threshold]
 
@@ -70,10 +86,10 @@ def build_vocab(csv:str, threshold:int, keeppunctuation: bool, host_address:str,
         vocab.add_word(word)
     return vocab
 
-def process(input_csv:str, output_vocab:str, threshold:int = 1, keeppunctuation: bool = False, character_level: bool = False, host_address:str = "http://localhost:9000"):
+def process(input_json:str, output_vocab:str, threshold:int = 1, keeppunctuation: bool = False, character_level: bool = False, host_address:str = "http://localhost:9000", zh: bool=True):
     logger=logging.Logger("Build Vocab")
     logger.setLevel(logging.INFO)
-    vocab = build_vocab(csv=input_csv, threshold=threshold, keeppunctuation=keeppunctuation, host_address = host_address, character_level = character_level)
+    vocab = build_vocab(json=input_json, threshold=threshold, keeppunctuation=keeppunctuation, host_address=host_address, character_level = character_level, zh=zh)
     torch.save(vocab, output_vocab)
     logger.info("Total vocabulary size: {}".format(len(vocab)))
     logger.info("Saved vocab to '{}'".format(output_vocab))

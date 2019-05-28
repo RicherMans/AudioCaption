@@ -71,6 +71,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+notebooks/*
 
 # pyenv
 .python-version
@@ -102,3 +103,24 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# tensorboardX visualization
+runs/*
+
+# Results
+*Encoder_*Decoder/*
+
+# Original Data
+data/car/car_3610/*
+data/hospital/hospital_3707/*
+data/*/*.scp
+data/*/*.ark
+
+# Chinese tokenizer and BERT server
+dataserver/*
+bert_server/*
+
+# Pretrained embeddings
+pretrained_embedding/*
+
+

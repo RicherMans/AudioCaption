@@ -67,6 +67,16 @@ Downloading and running the CoreNLP tokenization server only needs to execute:
 It requires at least `java` being installed on your machine. It is recommended to run this script in the background.
 
 
+### BERT Pretrained Embeddings
+
+You can load pretrained word embeddings in [Google BERT](https://github.com/google-research/bert#pre-trained-models). It makes use of pretrained BERT-Base models instead of training word embeddings from scratch. If BERT sentence loss is used, then the BERT server must be running.
+
+Downloading and running the BERT server only needs to execute:
+
+```bash
+./prepare_bert_server.sh
+
+
 ## Extract Features
 
 * Filterbank (extracted with 25ms windows and 10ms shift):
@@ -119,4 +129,5 @@ python score.py data/hospital_fbank.ark GRUEncoder_GRUDecoder/SOMEPATH/model.th 
 ## Sampling
 
 Sampling is done by the `sample.py` script. It is ran by default after training finishes. 
+
 
