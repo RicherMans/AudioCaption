@@ -34,6 +34,8 @@ class SJTUDataLoader(data.Dataset):
         if sent_embedding_path:
             with open(sent_embedding_path, 'rb') as f:
                 self.sent_embeddings = pickle.load(f)
+        else:
+            self.sent_embeddings = None
 
 
     def __getitem__(self, index: int):
@@ -45,13 +47,42 @@ class SJTUDataLoader(data.Dataset):
         tokens = self.captions.iloc[[index]]['tokens'].tolist()[0]
         caption = [vocab('<start>')] + [vocab(token)
                                         for token in tokens] + [vocab('<end>')]
-        sent_embedding = self.sent_embeddings[index]
+        
         if self.transform:
             feature = self.transform(feature)
-        return torch.tensor(feature), torch.tensor(caption), torch.tensor(sent_embedding)
+
+        if self.sent_embeddings is not None:
+            sent_embedding = self.sent_embeddings[index]
+            return torch.tensor(feature), torch.tensor(caption), torch.tensor(sent_embedding)
+        else:
+            return torch.tensor(feature), torch.tensor(caption)
+
 
     def __len__(self):
         return len(self.indextodataid)
+
+
+def collate_fn_no_sent(data_batches):
+
+    data_batches.sort(key=lambda x: len(x[1]), reverse=True)
+
+    def merge_seq(dataseq, dim=0):
+        lengths = [seq.shape for seq in dataseq]
+        # Assuming duration is given in the first dimension of each sequence
+        maxlengths = tuple(np.max(lengths, axis=dim))
+        # For the case that the lengths are 2 dimensional
+        lengths = np.array(lengths)[:, dim]
+        padded = torch.zeros((len(dataseq),) + maxlengths)
+        for i, seq in enumerate(dataseq):
+            end = lengths[i]
+            padded[i, :end] = seq[:end]
+        return padded, lengths
+    features, captions = zip(*data_batches)
+    features_seq, feature_lengths = merge_seq(features)
+    targets_seq, target_lengths = merge_seq(captions)
+
+    return features_seq, targets_seq, target_lengths
+
 
 
 def collate_fn(data_batches):
@@ -77,23 +108,24 @@ def collate_fn(data_batches):
 
 
 def create_dataloader(
-        kaldi_string, caption_json_path, vocab_path, sent_embedding_path, transform=None,
+        kaldi_string, caption_json_path, vocab_path, transform=None,
         shuffle=True, batch_size: int = 16, num_workers=1,**kwargs
         ):
     dataset = SJTUDataLoader(
         kaldi_string=kaldi_string,
         caption_json_path=caption_json_path,
-        sent_embedding_path=sent_embedding_path,
+        sent_embedding_path=None,
         vocab_path=vocab_path,
         transform=transform)
 
     return data.DataLoader(
         dataset, batch_size=batch_size, num_workers=num_workers,
-        shuffle=shuffle, collate_fn=collate_fn, **kwargs)
+        shuffle=shuffle, collate_fn=collate_fn_no_sent, **kwargs)
+
 
 def create_dataloader_train_cv(
-        kaldi_string, caption_json_path, vocab_path, sent_embeddings_path, transform=None,
-        shuffle=True, batch_size: int = 16, num_workers=1, percent = 90,
+        kaldi_string, caption_json_path, vocab_path, sent_embedding_path, transform=None,
+        shuffle=True, batch_size: int = 16, num_workers=1, percent=90,
         ):
     dataset = SJTUDataLoader(
         kaldi_string=kaldi_string,

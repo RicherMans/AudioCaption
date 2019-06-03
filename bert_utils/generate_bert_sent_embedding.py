@@ -19,7 +19,7 @@ def main(captions_file: str,  output: str,  embedding_size: int = 768, train: bo
         for i in tqdm(range(len(captions))):
             caption = captions[i]
             bert_sentence_embeddings[i] = bc.encode([caption])
-        
+
     else:
         bert_sentence_embeddings = {}
 

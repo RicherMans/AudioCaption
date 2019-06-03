@@ -1,6 +1,7 @@
 # AudioCaption : Listen and Tell
 
 This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper [Audiocaption: Listen and Tell](https://arxiv.org/abs/1902.09254)
+The source code and dataset in the InterSpeech2019 Paper (submitted) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
 
 Firstly please checkout this repository.
 
@@ -22,7 +23,10 @@ unzip hospital_audio.zip
 
 If you need a proxy to download the dataset, we recommend using [Proxychains](https://github.com/rofl0r/proxychains-ng).
 
-The labels can be found in this repository in the directory `data/labels`. The experiments can be run with the Chinese labels `hospital_cn.csv` or the English ones `hospital_en.csv`.
+<!-- The labels can be found in this repository in the directory `data/labels`. The experiments can be run with the Chinese labels `hospital_cn.csv` or the English ones `hospital_en.csv`. -->
+The labels can be found in the directory `data/*/labels`. The experiments can be run with the Chinese labels `*_ch.json` or the English ones `*_en.json`.
+
+The dataset on car scene is also uploaded and can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
 
 # Baseline
 

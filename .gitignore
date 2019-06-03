@@ -111,7 +111,7 @@ runs/*
 *Encoder_*Decoder/*
 
 # Original Data
-data/car/car_3610/*
+data/car/car_3602/*
 data/hospital/hospital_3707/*
 data/*/*.scp
 data/*/*.ark
