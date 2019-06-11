@@ -31,9 +31,9 @@ class SJTUDataLoader(data.Dataset):
         self.indextodataid = list(
             idx_to_fname[idx_to_fname.isin(list(self.dataset.keys()))]) 
         self.vocab = torch.load(vocab_path)
+        
         if sent_embedding_path:
-            with open(sent_embedding_path, 'rb') as f:
-                self.sent_embeddings = pickle.load(f)
+            self.sent_embeddings = np.load(sent_embedding_path)
         else:
             self.sent_embeddings = None
 

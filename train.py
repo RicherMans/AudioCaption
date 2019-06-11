@@ -221,9 +221,10 @@ def main(features: str, vocab_file: str,
     logger.info(
         "<== Estimating Scaler ({}) ==>".format(
             scaler.__class__.__name__))
-    for feat, cap, embed, lengths in create_dataloader(
-            kaldi_string, config_parameters['captions_file'], vocab_file,
-            config_parameters['sent_embedding_path'],
+    for feat, cap, lengths in create_dataloader(
+            kaldi_string=kaldi_string,
+            caption_json_path=config_parameters['captions_file'],
+            vocab_path=vocab_file,
             **config_parameters['dataloader_args']):
         feat = feat.reshape(-1, feat.shape[-1])
         scaler.partial_fit(feat)
