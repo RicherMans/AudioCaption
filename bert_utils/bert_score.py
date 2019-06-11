@@ -56,7 +56,6 @@ def score(data_path: str, encoder_path: str, vocab_path: str, bert_sent_embed_la
     encodermodel = encodermodel.to(DEVICE).eval()
     decodermodel = decodermodel.to(DEVICE).eval()
 
-    max_encode_length = decodermodel.attn.out_features
     kaldi_string = parsecopyfeats(
         data_path, **config_parameters['feature_args'])
     bert_score = []
@@ -83,34 +82,13 @@ def score(data_path: str, encoder_path: str, vocab_path: str, bert_sent_embed_la
                 # Generate an caption embedding
                 encoded_feature, encoder_state = encodermodel(features)
 
-                padded_encoded_feature = torch.zeros(max_encode_length, encoded_feature.shape[-1]).to(DEVICE)
-                padded_encoded_feature[:encoded_feature.shape[1], :] = encoded_feature.squeeze(0)
-
-                outputs = [vocabulary.word2idx['<start>']]
-                decoder_hidden = encoder_state
-
-                for di in range(sample_length):
-                    if vocabulary.idx2word[outputs[-1]] == '<end>':
-                        break
-                    input_word = torch.tensor(outputs[di]).to(DEVICE)
-                    word_output, decoder_hidden, attn_weight = decodermodel(
-                        padded_encoded_feature.unsqueeze(0), input_word, decoder_hidden)
-                    outputs.append(word_output.argmax().item())
+                sampled_ids = decodermodel.sample(
+                    encoded_feature, states=encoder_state, maxlength=sample_length)
+                sampled_ids = sampled_ids[0].cpu().numpy()
 
                 # Convert word_ids to words
                 candidate = []
-                for word_id in outputs:
-                    word = vocabulary.idx2word[word_id]
-                    # Dont add start, end tokens
-                    if word == '<end>':
-                        break
-                    elif word == '<start>':
-                        continue
-                    candidate.append(word)
-
-                # Convert word_ids to words
-                candidate = []
-                for word_id in outputs:
+                for word_id in sampled_ids:
                     word = vocabulary.idx2word[word_id]
                     # Dont add start, end tokens
                     if word == '<end>':
