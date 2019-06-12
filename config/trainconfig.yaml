@@ -49,7 +49,7 @@ bert_word_embedding_path: pretrained_embedding/car/ch/bert_word_ch.npy
 load_word2vec: False
 word2vec_path: pretrained_embedding/car/ch/word2vec_ch.model
 
-sent_embedding_path: pretrained_embedding/car/ch/bert_train_sent.npy
+sent_embedding_path: pretrained_embedding/car/ch/word2vec_sent.npy
 
 loss_type: CE # Can be CE | CE_sent
 

@@ -1,6 +1,6 @@
 pandas==0.23.4
 numpy==1.15.0
-torch==0.4.1.post2
+torch==0.4.1
 torchnet==0.0.4
 tqdm==4.24.0
 nltk==3.4.5
@@ -13,3 +13,4 @@ scikit_learn==0.20.0
 PyYAML==3.13
 bert-serving-server==1.8.3
 bert-serving-client==1.8.3
+gensim==3.7.3
