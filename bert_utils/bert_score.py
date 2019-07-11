@@ -100,7 +100,7 @@ def score(data_path: str, encoder_path: str, vocab_path: str, bert_sent_embed_la
                 candidate = ''.join(candidate)
                 candidate_embed = torch.from_numpy(bc.encode([candidate]))
 
-                reference_embedding = reference_embeddings[k]
+                reference_embedding = reference_embeddings[int(k)]
                 reference_embedding = torch.tensor(reference_embedding)
                 
                 human_scores = []

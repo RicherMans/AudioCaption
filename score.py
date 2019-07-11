@@ -89,8 +89,6 @@ def score(data_path: str, encoder_path: str, vocab_path: str,
                 #bleu_avg_score = []
                 human_scores = []
                 system_scores = []
-                if len(reference_sent) <= 1:
-                    continue
                 for turn in range(len(reference_sent)):
                     human_cand = reference_sent[turn]
                     human_ref = [x for i, x in enumerate(
