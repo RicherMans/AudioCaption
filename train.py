@@ -161,6 +161,9 @@ def criterion_improver(mode):
     return inner
 
 
+import utils.gpu_selection as gpu_selection
+deviceId, gpu_name, valid_gpus = gpu_selection.auto_select_gpu()
+torch.cuda.set_device(deviceId)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.manual_seed(1)
 

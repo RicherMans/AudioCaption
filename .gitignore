@@ -109,6 +109,7 @@ runs/*
 
 # Results
 *Encoder_*Decoder/*
+results/*
 
 # Original Data
 data/car/car_3602/*
