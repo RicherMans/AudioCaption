@@ -2,7 +2,7 @@
 
 This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper [Audiocaption: Listen and Tell](https://arxiv.org/abs/1902.09254).
 
-The source code and dataset in the InterSpeech2019 Paper (submitted) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
+The source code and dataset in the InterSpeech2019 Paper (rejected) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
 
 Firstly please checkout this repository.
 
