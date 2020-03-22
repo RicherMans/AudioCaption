@@ -2,6 +2,29 @@
 
 This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper [Audiocaption: Listen and Tell](https://arxiv.org/abs/1902.09254).
 
+```
+Mengyue Wu, Heinrich Dinkel and Kai Yu. Audio Caption: Listen and Tell. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), Brighton, UK, 2019, 830-834
+```
+
+If you'd like to use the dataset, please cite:
+```
+@inproceedings{Wu2019,
+  author    = {Mengyue Wu and
+               Heinrich Dinkel and
+               Kai Yu},
+  title     = {Audio Caption: Listen and Tell},
+  booktitle = {{IEEE} International Conference on Acoustics, Speech and Signal Processing,
+               {ICASSP} 2019, Brighton, United Kingdom, May 12-17, 2019},
+  pages     = {830--834},
+  publisher = {{IEEE}},
+  year      = {2019},
+  url       = {https://doi.org/10.1109/ICASSP.2019.8682377},
+  doi       = {10.1109/ICASSP.2019.8682377},
+  timestamp = {Wed, 16 Oct 2019 14:14:52 +0200},
+}
+```
+
+
 The source code and dataset in the InterSpeech2019 Paper (rejected) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
 
 Firstly please checkout this repository.
