@@ -11,8 +11,13 @@ git clone https://www.github.com/Richermans/AudioCaption
 ```
 
 # Dataset
-The full AudioCaption dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
-The audio of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
+
+
+## Download
+The full AudioCaption dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9).
+There is also a [zenodo link](https://zenodo.org/record/3715277#.XnY4IigzbZs)
+
+The audio-only part of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
 
 A easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
 
