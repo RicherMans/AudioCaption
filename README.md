@@ -1,12 +1,51 @@
 # AudioCaption : Listen and Tell
 
-This repository provides the baseline model source code as well as the labels to the ICASSP2019 Paper [Audiocaption: Listen and Tell](https://arxiv.org/abs/1902.09254).
+This repository provides source code for several models on audio captioning as well as labels of several datasets.
+
+Firstly please checkout this repository.
+
+```bash
+git clone https://www.github.com/Richermans/AudioCaption
+```
+
+# Dataset
+
+## AudioCaption
+
+### hospital
+
+The full AudioCaption hospital dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
+The audio of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
+
+A easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
 
 ```
-Mengyue Wu, Heinrich Dinkel and Kai Yu. Audio Caption: Listen and Tell. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), Brighton, UK, 2019, 830-834
+cd data
+gdown https://drive.google.com/uc?id=1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC
+unzip hospital_audio.zip
 ```
 
-If you'd like to use the dataset, please cite:
+If you need a proxy to download the dataset, we recommend using [Proxychains](https://github.com/rofl0r/proxychains-ng).
+
+### car
+
+The dataset on car scene can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
+
+The source code and dataset in the InterSpeech2019 Paper (submitted) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
+
+## Clotho
+
+Clotho dataset can be downloaded from [Zenodo](https://zenodo.org/record/3490684).
+
+For all datasets, labels are provided in the directory `data/*/labels`.
+
+# Related Papers
+Here are papers related to this repository:
+* [Audio Caption: Listen And Tell](https://arxiv.org/abs/1902.09254)
+* [What Does A Car-sette Tape Tell?](http://arxiv.org/abs/1905.13448)
+* [Clotho: An Audio Captioning Dataset](https://arxiv.org/abs/1910.09387)
+
+If you'd like to use the AudioCaption dataset, please cite:
 ```
 @inproceedings{Wu2019,
   author    = {Mengyue Wu and
@@ -24,38 +63,6 @@ If you'd like to use the dataset, please cite:
 }
 ```
 
-
-The source code and dataset in the InterSpeech2019 Paper (rejected) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
-
-Firstly please checkout this repository.
-
-```bash
-git clone https://www.github.com/Richermans/AudioCaption
-```
-
-# Dataset
-
-
-## Download
-The full AudioCaption dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9).
-There is also a [zenodo link](https://zenodo.org/record/3715277#.XnY4IigzbZs)
-
-The audio-only part of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
-
-A easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
-
-```
-cd data
-gdown https://drive.google.com/uc?id=1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC
-unzip hospital_audio.zip
-```
-
-If you need a proxy to download the dataset, we recommend using [Proxychains](https://github.com/rofl0r/proxychains-ng).
-
-<!-- The labels can be found in this repository in the directory `data/labels`. The experiments can be run with the Chinese labels `hospital_cn.csv` or the English ones `hospital_en.csv`. -->
-The labels can be found in the directory `data/*/labels`. The experiments can be run with the Chinese labels `*_ch.json` or the English ones `*_en.json`.
-
-The dataset on car scene is also uploaded and can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
 
 # Baseline
 
@@ -89,78 +96,79 @@ This repository already provided the tokenized dataset in the json format. Howev
 
 This dataset is labelled in Chinese. Chinese has some specific differences to most Indo-European languages, including its script. In particular, Chinese does not use an indicator for word separation, as English does with a blank space. Rather it depends on the reader to split a sentence into semantically sound tokens.
 
-However, the [Stanford CoreNLP](https://stanfordnlp.github.io/CoreNLP/) software provides support for tokenization of Chinese. The script `prepare_dataserver.sh` downloads all the necessary plugins for the CoreNLP tool in order to enable tokenization. The scripts `build_vocab.py` and `create_labels.py` do need a running server in the background in order to work.
+However, the [Stanford CoreNLP](https://stanfordnlp.github.io/CoreNLP/) software provides support for tokenization of Chinese. The script `prepare_dataserver.sh` downloads all the necessary plugins for the CoreNLP tool in order to enable tokenization. The script `utils/build_vocab.py` does need a running server in the background in order to work.
 
 Downloading and running the CoreNLP tokenization server only needs to execute:
 
 ```bash
-./prepare_dataserver.sh
+bash scripts/prepare_dataserver.sh
 ```
 
 It requires at least `java` being installed on your machine. It is recommended to run this script in the background.
 
 
-### BERT Pretrained Embeddings
+### (Optional) BERT Pretrained Embeddings
 
-You can load pretrained word embeddings in [Google BERT](https://github.com/google-research/bert#pre-trained-models). It makes use of pretrained BERT-Base models instead of training word embeddings from scratch. If BERT sentence loss is used, then the BERT server must be running.
+You can load pretrained word embeddings in Google [BERT](https://github.com/google-research/bert#pre-trained-models) instead of training word embeddings from scratch. The scripts in `utils/bert` need a BERT server in the background. We use BERT server from [bert-as-service repository](https://github.com/hanxiao/bert-as-service).
 
-Downloading and running the BERT server only needs to execute:
+Downloading and running the BERT server needs to execute:
 
 ```bash
-./prepare_bert_server.sh
+bash scripts/prepare_bert_server.sh <path-to-server> <num-workers>
+```
 
 
 ## Extract Features
 
-* Filterbank (extracted with 25ms windows and 10ms shift):
 
 The kaldi scp format requires a tab or space separated line with the information: `FEATURENAME WAVEPATH`
 
+For example, to extract feature from hospital data:
+
 ```bash
-cd data
-find `pwd`/hospital_3707/ -type f | awk -F[./] '{print $(NF-1),$0}' > hospital.scp
-compute-fbank-feats --config=fbank_config/fbank.conf scp:hospital.scp ark:hospital_fbank.ark
+find `pwd`/data/hospital/hospital_3707/ -type f | awk -F[./] '{print $(NF-1),$0}' > data/hospital/wav.scp
 ```
 
-* Logmelspectrogram
+* Filterbank:
 
 ```bash
-cd data
-python3 ../feature/featextract.py `find hospital_* -type f` hospital_logmel.ark mfcc -win_length 1764 -hop_length 882
+compute-fbank-feats --config=fbank_config/fbank.conf scp,p:`pwd`/hospital/wav.scp ark:- | copy-feats ark:- ark,scp:`pwd`/hospital/fbank.ark,`pwd`/hospital/fbank.scp
+```
+
+* Mfcc:
+
+```bash
+compute-mfcc-feats --config=fbank_config/mfcc.conf scp,p:`pwd`/hospital/wav.scp ark:- | copy-feats ark:- ark,scp:`pwd`/hospital/mfcc.ark,`pwd`/hospital/mfcc.scp
 ```
 
 ## Training Configurator
 
-Training configuration is done in `config/*.yaml`. Here one can adjust some hyperparameters e.g., number of hidden layers or embedding size. You can also write your own Models in `models.py` and Adjust the config to use that model (e.g. `encoder:MYMODEL`). 
-Note: All parameters within the `train.py` script use exclusively parameters with the same name as their `.yaml` file counterpart. They can all be switched and changed on the fly by passing `--ARG VALUE`, e.g., if one wishes to switch the captions file to use english captions, pass `--captions_file data/labels/hospital_en.json`.
+Training configuration is done in `config/*.yaml`. Here one can adjust some hyperparameters e.g., number of hidden layers or embedding size. You can also write your own models in `models/*.py` and adjust the config to use that model (e.g. `encoder: MYMODEL`). 
+Note: All parameters within the `runners/*.py` script use exclusively parameters with the same name as their `.yaml` file counterpart. They can all be switched and changed on the fly by passing `--ARG VALUE`, e.g., if one wishes to switch the captions file to use english captions, pass `--caption_file data/hospital/en_dev.json`.
 
 
 ## Training models
 
-In order to train a model (Chinese by default, with FBank features), simply run:
+In order to train a model (for example using standard cross entropy loss), simply run:
 
 ```bash
-python train.py data/hospital_fbank.ark data/vocab.cn
+python runners/run.py train config/xe.yaml
 ```
 
-This script creates a new directory `ENCODERMODEL_DECODERMODEL/TIMESTAMP`. On a CPU the training might take about half an hour for one epoch ( we run by default for 20 ). On a GPU the training is much faster, approximately couple of minutes on a GTX1080.
+This will store the training logs and model checkpoints in `OUTPUTPATH/MODEL/TIMESTAMP`.
 
-The training creates for each epoch one `model_EPOCH.th` file in the output directory. Finally after training finished, the script will use the best model (according to PPL) in order to generate sentences given some input features (by default the same that were used for training)
+## Predicting and Evaluating
 
-## Evaluating
-
-Run the `score.py` script with the following parameters:
+Predicting and evaluating is done by running `coco_evaluate` function in `runners/*.py`:
 
 ```bash
-python score.py DATA_DIR MODEL_PATH VOCAB_PATH
-```
-e.g.,
-```bash
-python score.py data/hospital_fbank.ark GRUEncoder_GRUDecoder/SOMEPATH/model.th data/vocab_cn.th
+export kaldi_stream="copy-feats scp:data/hospital/fbank_eval.scp ark:- |"
+python runners/run.py coco_evaluate EXP_PATH "$kaldi_stream" data/hospital/zh_eval.json
 ```
 
-## Sampling
+Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets (like Clotho).
 
-Sampling is done by the `sample.py` script. It is ran by default after training finishes. 
+BERT similarity score (proposed in [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448)) can also be calculated by `bert_evaluate` function in `runners/*.py`, with BERT server running in the background.
+
 
 
