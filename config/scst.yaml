@@ -1,0 +1,41 @@
+outputpath: experiments_cross_data
+
+feature_stream: copy-feats scp:data/fbank.scp ark:- |
+caption_file: data/train.json
+vocab_file: data/vocab_zh.pth
+dataloader_args:
+    batch_size: 32
+    num_workers: 4
+
+scaler: StandardScaler # Can be any of sklearn.preprocessing that supports fit_partial
+scaler_args:
+    with_std : True
+    with_mean : True        
+
+encodermodel: GRUEncoder
+encodermodel_args:
+    num_layers: 1
+    dropout: 0.0
+    # Enables the passing of the hidden encoder state to the decoder
+    use_hidden: True
+    # Can be time, mean ( for last timestep, mean reduction)
+    representation: mean
+    hidden_size: 512
+decodermodel: GRUDecoder
+decodermodel_args:
+    num_layers: 1
+    hidden_size: 512
+model: ScstModel
+model_args:
+    embed_size: 256
+    dropout: 0.3
+load_pretrained: True
+pretrained: experiments_cross_data/CaptionModel/2020-05-19_11-06-05_c046af32997d11eab6380cc47ae64a5e/saved.pth
+
+improvecriterion: score
+
+optimizer: Adam
+optimizer_args:
+    lr: 0.00005
+epochs: 15
+

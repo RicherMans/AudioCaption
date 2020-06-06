@@ -1,153 +1,183 @@
-import kaldi_io
-import torch
-import torch.utils.data as data
-from build_vocab import Vocabulary
-import pandas as pd
-from nltk.parse.corenlp import CoreNLPParser
-import numpy as np
 import os
-import pickle 
+import pandas as pd
+import numpy as np
+import torch
+import utils.kaldi_io as kaldi_io
+from utils.build_vocab import Vocabulary
 
 
-class SJTUDataLoader(data.Dataset):
+class SJTUDataset(torch.utils.data.Dataset):
 
-    def __init__(self, kaldi_string, caption_json_path,
-                 vocab_path, sent_embedding_path, transform=None
-                 ):
-        """Dataloader for the SJTU Audiocaptioning dataset
+    def __init__(self, kaldi_stream, caption_df,
+                 vocabulary, transform=None):
+        """Dataset for the SJTU Audiocaptioning dataset
 
         Args:
-            kaldi_string (string): Kaldi command to load the data (e.g., copy-feats ark:- ark:- |)
-            caption_json_path (string): Path to the captioning
-            vocab_path (string): Path to the vocabulary (preprocessed by build_vocab)
+            kaldi_stream (string): Kaldi command to load the data (e.g., copy-feats ark:- ark:- |)
+            caption_df (pd.DataFrame): Captioning dataframe
+            vocab_file (string): Path to the vocabulary (preprocessed by build_vocab)
             transform (function, optional): Defaults to None. Transformation onto the data (function)
         """
-        self.dataset = {k: v for k, v in kaldi_io.read_mat_ark(kaldi_string)}
-        self.transform = transform
-        self.captions = pd.read_json(
-            caption_json_path)
-        idx_to_fname = self.captions['filename'].apply(
-            lambda x: os.path.splitext(os.path.basename(x))[0])
-        self.indextodataid = list(
-            idx_to_fname[idx_to_fname.isin(list(self.dataset.keys()))]) 
-        self.vocab = torch.load(vocab_path)
-        
-        if sent_embedding_path:
-            self.sent_embeddings = np.load(sent_embedding_path)
-        else:
-            self.sent_embeddings = None
-
+        super(SJTUDataset, self).__init__()
+        self._dataset = {k: v for k, v in kaldi_io.read_mat_ark(kaldi_stream)}
+        self._transform = transform
+        self._caption_df = caption_df
+        # idx_to_fname = self._caption_df['filename'].apply(
+            # lambda x: os.path.splitext(os.path.basename(x))[0]) # pd.Series, index -> filename
+        # self._indextodataid = list(
+            # idx_to_fname[idx_to_fname.isin(list(self._dataset.keys()))]) 
+        self._vocabulary = vocabulary
 
     def __getitem__(self, index: int):
-        dataid = self.indextodataid[index]
-        # caption = self.captions.iloc[[index]]['caption'].to_string()
-        dataset = self.dataset
-        vocab = self.vocab
-        feature = dataset[dataid]
-        tokens = self.captions.iloc[[index]]['tokens'].tolist()[0]
-        caption = [vocab('<start>')] + [vocab(token)
-                                        for token in tokens] + [vocab('<end>')]
-        
-        if self.transform:
-            feature = self.transform(feature)
+        # dataid = self._indextodataid[index]
+        dataid = self._caption_df.iloc[index]["key"]
+        feature = self._dataset[dataid]
+        tokens = self._caption_df.iloc[[index]]['tokens'].tolist()[0]
+        caption = [self._vocabulary('<start>')] + \
+            [self._vocabulary(token) for token in tokens] + \
+            [self._vocabulary('<end>')]
 
-        if self.sent_embeddings is not None:
-            sent_embedding = self.sent_embeddings[index]
-            return torch.tensor(feature), torch.tensor(caption), torch.tensor(sent_embedding)
-        else:
-            return torch.tensor(feature), torch.tensor(caption)
+        if self._transform:
+            feature = self._transform(feature)
 
+        return torch.as_tensor(feature), torch.as_tensor(caption), dataid
 
     def __len__(self):
-        return len(self.indextodataid)
+        return len(self._caption_df)
+
+class SJTUDatasetSentence(SJTUDataset):
+
+    def __init__(self, kaldi_stream, caption_df, 
+                 sent_embeds, vocabulary, transform=None):
+        """Add sentence embeddings
+        Args:
+            sent_embeds (dict): Dict containing sentence embeddings for training, can be accessed by "<key>_<caption_index>"
+        """
+        super(SJTUDatasetSentence, self).__init__(
+            kaldi_stream, caption_df, vocabulary, transform)
+        self._sent_embeds = sent_embeds
+
+    def __getitem__(self, index: int):
+        dataid = self._caption_df.iloc[index]["key"]
+        caption_idx = self._caption_df.iloc[index]["caption_index"]
+        feature = self._dataset[dataid]
+        tokens = self._caption_df.iloc[[index]]["tokens"].tolist()[0]
+        caption = [self._vocabulary('<start>')] + \
+            [self._vocabulary(token) for token in tokens] + \
+            [self._vocabulary('<end>')]
+        sent_embed = self._sent_embeds["{}_{}".format(dataid, caption_idx)]
+
+        if self._transform:
+            feature = self._transform(feature)
+
+        return torch.as_tensor(feature), torch.as_tensor(caption), \
+                torch.as_tensor(sent_embed), dataid
 
 
-def collate_fn_no_sent(data_batches):
 
-    data_batches.sort(key=lambda x: len(x[1]), reverse=True)
+class SJTUDatasetEval(torch.utils.data.Dataset):
+    
+    def __init__(self, kaldi_stream, kaldi_scp, transform=None):
+        super(SJTUDatasetEval, self).__init__()
+        self._kaldi_scp = kaldi_scp
+        self._data_generator = kaldi_io.read_mat_ark(kaldi_stream)
+        self._transform = transform
 
-    def merge_seq(dataseq, dim=0):
-        lengths = [seq.shape for seq in dataseq]
-        # Assuming duration is given in the first dimension of each sequence
-        maxlengths = tuple(np.max(lengths, axis=dim))
-        # For the case that the lengths are 2 dimensional
-        lengths = np.array(lengths)[:, dim]
-        padded = torch.zeros((len(dataseq),) + maxlengths)
-        for i, seq in enumerate(dataseq):
-            end = lengths[i]
-            padded[i, :end] = seq[:end]
-        return padded, lengths
-    features, captions = zip(*data_batches)
-    features_seq, feature_lengths = merge_seq(features)
-    targets_seq, target_lengths = merge_seq(captions)
+    def __getitem__(self, index):
+        key, feature = next(self._data_generator)
+        if self._transform:
+            feature = self._transform(feature)
+        return key, torch.as_tensor(feature)
 
-    return features_seq, targets_seq, target_lengths
-
+    def __len__(self):
+        with open(self._kaldi_scp, "r") as f:
+            length = len(f.readlines())
+        return length
 
 
-def collate_fn(data_batches):
-    data_batches.sort(key=lambda x: len(x[1]), reverse=True)
+def collate_fn(length_idxs: int):
 
-    def merge_seq(dataseq, dim=0):
-        lengths = [seq.shape for seq in dataseq]
-        # Assuming duration is given in the first dimension of each sequence
-        maxlengths = tuple(np.max(lengths, axis=dim))
-        # For the case that the lengths are 2 dimensional
-        lengths = np.array(lengths)[:, dim]
-        padded = torch.zeros((len(dataseq),) + maxlengths)
-        for i, seq in enumerate(dataseq):
-            end = lengths[i]
-            padded[i, :end] = seq[:end]
-        return padded, lengths
-    features, captions, sent_embeddings = zip(*data_batches)
-    features_seq, feature_lengths = merge_seq(features)
-    targets_seq, target_lengths = merge_seq(captions)
-    sent_embedding_seq, sent_embedding_lengths = merge_seq(sent_embeddings)
+    def collate_wrapper(data_batches):
+        # x: [feature, caption]
+        # data_batches: [[feat1, cap1], [feat2, cap2], ..., [feat_n, cap_n]]
+        data_batches.sort(key=lambda x: len(x[1]), reverse=True)
 
-    return features_seq, targets_seq, sent_embedding_seq, target_lengths
+        def merge_seq(dataseq, dim=0):
+            lengths = [seq.shape for seq in dataseq]
+            # Assuming duration is given in the first dimension of each sequence
+            maxlengths = tuple(np.max(lengths, axis=dim))
+            # For the case that the lengths are 2 dimensional
+            lengths = np.array(lengths)[:, dim]
+            padded = torch.zeros((len(dataseq),) + maxlengths)
+            for i, seq in enumerate(dataseq):
+                end = lengths[i]
+                padded[i, :end] = seq[:end]
+            return padded, lengths
+        
+        data_out = []
+        data_len = []
+        for idx, data in enumerate(zip(*data_batches)):
+            if isinstance(data[0], torch.Tensor):
+                if len(data[0].shape) == 0:
+                    data_seq = torch.as_tensor(data)
+                elif data[0].size(0) > 1:
+                    data_seq, tmp_len = merge_seq(data)
+                    if idx in length_idxs:
+                        data_len.append(tmp_len)
+            else:
+                data_seq = data
+            data_out.append(data_seq)
+        data_out.extend(data_len)
+
+        return data_out
+
+    return collate_wrapper
 
 
 def create_dataloader(
-        kaldi_string, caption_json_path, vocab_path, transform=None,
+        kaldi_stream, caption_df, vocabulary, transform=None,
         shuffle=True, batch_size: int = 16, num_workers=1,**kwargs
         ):
-    dataset = SJTUDataLoader(
-        kaldi_string=kaldi_string,
-        caption_json_path=caption_json_path,
-        sent_embedding_path=None,
-        vocab_path=vocab_path,
+    dataset = SJTUDataset(
+        kaldi_stream=kaldi_stream,
+        caption_df=caption_df,
+        vocabulary=vocabulary,
         transform=transform)
 
-    return data.DataLoader(
+    return torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, num_workers=num_workers,
-        shuffle=shuffle, collate_fn=collate_fn_no_sent, **kwargs)
+        shuffle=shuffle, collate_fn=collate_fn([0, 1]), **kwargs)
 
 
-def create_dataloader_train_cv(
-        kaldi_string, caption_json_path, vocab_path, sent_embedding_path, transform=None,
-        shuffle=True, batch_size: int = 16, num_workers=1, percent=90,
-        ):
-    dataset = SJTUDataLoader(
-        kaldi_string=kaldi_string,
-        caption_json_path=caption_json_path,
-        sent_embedding_path=sent_embedding_path,
-        vocab_path=vocab_path,
-        transform=transform)
-    all_indices = torch.arange(len(dataset))
-    num_train_indices = int(len(all_indices) * percent / 100)
-    train_indices = all_indices[:num_train_indices]
-    cv_indices = all_indices[num_train_indices:]
-    trainsampler=data.SubsetRandomSampler(train_indices)
-    # Do not shuffle
-    cvsampler = SubsetSampler(cv_indices)
+def create_dataloader_train_cv(kaldi_stream,
+                               caption_df,
+                               vocabulary,
+                               transform=None,
+                               batch_size: int = 16,
+                               num_workers=4,
+                               percent=90,
+                               **kwargs):
+    train_df = caption_df.sample(frac=percent / 100., random_state=0)
+    cv_df = caption_df[~caption_df.index.isin(train_df.index)]
 
-    return data.DataLoader(
-        dataset, batch_size=batch_size, num_workers=num_workers,
-        collate_fn=collate_fn, sampler=trainsampler),data.DataLoader(
-        dataset, batch_size=batch_size, num_workers=num_workers,
-        collate_fn=collate_fn, sampler=cvsampler)
+    return create_dataloader(kaldi_stream=kaldi_stream,
+                             caption_df=caption_df,
+                             vocabulary=vocabulary,
+                             transform=transform,
+                             batch_size=batch_size,
+                             shuffle=True,
+                             num_workers=num_workers,
+                             **kwargs), create_dataloader(
+                                 kaldi_stream=kaldi_stream,
+                                 caption_df=caption_df,
+                                 vocabulary=vocabulary,
+                                 transform=transform,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers,
+                                 **kwargs)
 
-class SubsetSampler(data.Sampler):
+class SubsetSampler(torch.utils.data.Sampler):
     r"""Samples elements from a given list of indices, without replacement.
 
     Arguments:
@@ -168,31 +198,35 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'vocab',
-        default='data/vocab_hospital.th',
+        'vocab_file',
+        default='data/car/vocab_zh.pth',
         type=str,
         nargs="?")
     args = parser.parse_args()
-    dataset = SJTUDataLoader(
-        "data/logmelspect/64dim/hospital.ark",
-        "data/filelabel_merged/hospital_tokenized.json",
-        vocab_path=args.vocab)
+    caption_df = pd.read_json("data/car/labels/car_ch.json")
+    vocabulary = torch.load(args.vocab_file)
+    dataset = SJTUDataset(
+        "copy-feats scp:data/car/feats.scp ark:- |",
+        caption_df,
+        vocabulary)
     # for feat, target in dataset:
     # print(feat.shape, target.shape)
-    dsetloader = data.DataLoader(
+    dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=16,
         collate_fn=collate_fn,
         num_workers=4,
         shuffle=True)
     agg = 0
-    for feat, target, lengths in dsetloader:
+    for feat, target, lengths in dataloader:
         agg += len(feat)
         print(feat.shape, target.shape, lengths)
     print("Overall seen {} feats (of {})".format(agg, len(dataset)))
-    traindataloader, cvdataloader = create_dataloader_train_cv("copy-feats ark:data/logmelspect/64dim/hospital.ark ark:- |",
-        "data/filelabel_merged/hospital_tokenized.json",vocab_path=args.vocab)
+    traindataloader, cvdataloader = create_dataloader_train_cv(
+            "copy-feats scp:data/car/feats.scp ark:- |",
+            caption_df,
+            vocabulary)
     for f, t, l in cvdataloader:
-        print(f.shape, t. shape, l)
+        print(f.shape, t.shape, l)
 
 

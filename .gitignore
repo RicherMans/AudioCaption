@@ -72,6 +72,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 notebooks/*
+*.ipynb
 
 # pyenv
 .python-version
@@ -108,20 +109,32 @@ venv.bak/
 runs/*
 
 # Results
-*Encoder_*Decoder/*
-results/*
+experiments*/*
 
-# Original Data
+# Data files
 data/car/car_3602/*
 data/hospital/hospital_3707/*
 data/*/*.scp
 data/*/*.ark
+data/*/*.hdf5
+data/*/vocab*
+data/*/*score*
+data/*.scp
+data/*.ark
+data/*.hdf5
+data/*vocab*
+data/*score*
 
 # Chinese tokenizer and BERT server
-dataserver/*
-bert_server/*
+utils/dataserver/*
 
 # Pretrained embeddings
-pretrained_embedding/*
+data/*/embeddings/*
+
+# Backup files
+.backup/*
+
+# Vscode files
+.vscode/*
 
 

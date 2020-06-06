@@ -1,0 +1,52 @@
+outputpath: experiments/
+
+feature_stream: copy-feats scp:data/car/fbank.scp ark:- |
+caption_file: data/car/labels/zh_dev.json
+vocab_file: data/car/vocab_zh.pth
+sentence_embedding: data/car/embeddings/bert_sent_dev_zh.dict
+train_percent: 90
+dataloader_args:
+    batch_size: 32
+    num_workers: 4
+
+scaler: StandardScaler # Can be any of sklearn.preprocessing that supports fit_partial
+scaler_args:
+    with_std : True
+    with_mean : True        
+
+encodermodel: GRUEncoder
+encodermodel_args:
+    num_layers: 1
+    dropout: 0.0
+    # Enables the passing of the hidden encoder state to the decoder
+    use_hidden: True
+    # Can be time, mean ( for last timestep, mean reduction)
+    representation: mean
+    hidden_size: 512
+decodermodel: GRUDecoder
+decodermodel_args:
+    num_layers: 1
+    hidden_size: 512
+model: SentenceModel
+model_args:
+    embed_size: 256
+    sent_dim: 768
+    dropout: 0.3
+#pretrained_word_embedding: utils/pretrained_embedding/car/zh/bert_word.npy
+
+improvecriterion: loss # Can also be acc | loss
+teacher_forcing_ratio: 1.0
+teacher_forcing_on_validation: False
+
+optimizer: Adam
+optimizer_args:
+    lr: 0.0004
+    weight_decay: 0.0
+epochs: 20
+early_stop: 5
+scheduler_args:
+    mode: min
+    factor: 0.1
+    patience: 5
+    threshold: 0.001
+
