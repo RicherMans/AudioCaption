@@ -10,6 +10,8 @@ git clone https://www.github.com/Richermans/AudioCaption
 
 # Dataset
 
+For all datasets, labels are provided in the directory `data/*/labels`.
+
 ## AudioCaption
 
 ### hospital
@@ -31,13 +33,11 @@ If you need a proxy to download the dataset, we recommend using [Proxychains](ht
 
 The dataset on car scene can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
 
-The source code and dataset in the InterSpeech2019 Paper (submitted) [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
+The source code and dataset in the paper [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
 
 ## Clotho
 
 Clotho dataset can be downloaded from [Zenodo](https://zenodo.org/record/3490684).
-
-For all datasets, labels are provided in the directory `data/*/labels`.
 
 # Related Papers
 Here are papers related to this repository:
@@ -109,13 +109,17 @@ It requires at least `java` being installed on your machine. It is recommended t
 
 ### (Optional) BERT Pretrained Embeddings
 
-You can load pretrained word embeddings in Google [BERT](https://github.com/google-research/bert#pre-trained-models) instead of training word embeddings from scratch. The scripts in `utils/bert` need a BERT server in the background. We use BERT server from [bert-as-service repository](https://github.com/hanxiao/bert-as-service).
+You can load pretrained word embeddings in Google [BERT](https://github.com/google-research/bert#pre-trained-models) instead of training word embeddings from scratch. The scripts in `utils/bert` need a BERT server in the background. We use BERT server from [bert-as-service](https://github.com/hanxiao/bert-as-service).
 
-Downloading and running the BERT server needs to execute:
+To use bert-as-service, you need to first install the repository. It is recommended that you create a new environment with Tensorflow 1.3 to run BERT server since there is something wrong with this repository when using Tensorflow 2.x.
+
+After successful installation of [bert-as-service](https://github.com/hanxiao/bert-as-service), downloading and running the BERT server needs to execute:
 
 ```bash
 bash scripts/prepare_bert_server.sh <path-to-server> <num-workers>
 ```
+
+By default, server based on BERT base Chinese model is running in the background. You can change to other models by changing corresponding model name and path in `srcipts/prepare_bert_server.sh`.
 
 
 ## Extract Features
