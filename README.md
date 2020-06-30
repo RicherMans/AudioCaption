@@ -17,7 +17,9 @@ For all datasets, labels are provided in the directory `data/*/labels`.
 ### hospital
 
 The full AudioCaption hospital dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
+
 There is also a Zenodo link: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3715277.svg)](https://doi.org/10.5281/zenodo.3715277)
+
 The audio-only part of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
 
 An easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
