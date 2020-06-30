@@ -17,9 +17,10 @@ For all datasets, labels are provided in the directory `data/*/labels`.
 ### hospital
 
 The full AudioCaption hospital dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
-The audio of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
+There is also a Zenodo link: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3715277.svg)](https://doi.org/10.5281/zenodo.3715277)
+The audio-only part of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
 
-A easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
+An easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
 
 ```
 cd data
@@ -35,15 +36,10 @@ The dataset on car scene can be downloaded via [google drive](https://drive.goog
 
 The source code and dataset in the paper [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
 
-## Clotho
-
-Clotho dataset can be downloaded from [Zenodo](https://zenodo.org/record/3490684).
-
 # Related Papers
 Here are papers related to this repository:
 * [Audio Caption: Listen And Tell](https://arxiv.org/abs/1902.09254)
 * [What Does A Car-sette Tape Tell?](http://arxiv.org/abs/1905.13448)
-* [Clotho: An Audio Captioning Dataset](https://arxiv.org/abs/1910.09387)
 
 If you'd like to use the AudioCaption dataset, please cite:
 ```
@@ -129,25 +125,23 @@ The kaldi scp format requires a tab or space separated line with the information
 
 For example, to extract feature from hospital data:
 
-```bash
-find `pwd`/data/hospital/hospital_3707/ -type f | awk -F[./] '{print $(NF-1),$0}' > data/hospital/wav.scp
-```
-
 * Filterbank:
 
 ```bash
+find `pwd`/data/hospital/hospital_3707/ -type f | awk -F[./] '{print $(NF-1),$0}' > data/hospital/wav.scp
 compute-fbank-feats --config=fbank_config/fbank.conf scp,p:`pwd`/hospital/wav.scp ark:- | copy-feats ark:- ark,scp:`pwd`/hospital/fbank.ark,`pwd`/hospital/fbank.scp
 ```
 
-* Mfcc:
+* Logmelspectrogram:
 
 ```bash
-compute-mfcc-feats --config=fbank_config/mfcc.conf scp,p:`pwd`/hospital/wav.scp ark:- | copy-feats ark:- ark,scp:`pwd`/hospital/mfcc.ark,`pwd`/hospital/mfcc.scp
+python utils/featextract.py `find data/hospital/hospital_3707/ -type f` data/hospital/logmel.ark mfcc -win_length 1764 -hop_length 882
 ```
 
 ## Training Configurator
 
 Training configuration is done in `config/*.yaml`. Here one can adjust some hyperparameters e.g., number of hidden layers or embedding size. You can also write your own models in `models/*.py` and adjust the config to use that model (e.g. `encoder: MYMODEL`). 
+
 Note: All parameters within the `runners/*.py` script use exclusively parameters with the same name as their `.yaml` file counterpart. They can all be switched and changed on the fly by passing `--ARG VALUE`, e.g., if one wishes to switch the captions file to use english captions, pass `--caption_file data/hospital/en_dev.json`.
 
 
@@ -167,10 +161,11 @@ Predicting and evaluating is done by running `coco_evaluate` function in `runner
 
 ```bash
 export kaldi_stream="copy-feats scp:data/hospital/fbank_eval.scp ark:- |"
-python runners/run.py coco_evaluate EXP_PATH "$kaldi_stream" data/hospital/zh_eval.json
+export experiment_path=experiments/***
+python runners/run.py coco_evaluate $experiment_path "$kaldi_stream" data/hospital/zh_eval.json
 ```
 
-Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets (like Clotho).
+Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets.
 
 BERT similarity score (proposed in [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448)) can also be calculated by `bert_evaluate` function in `runners/*.py`, with BERT server running in the background.
 
