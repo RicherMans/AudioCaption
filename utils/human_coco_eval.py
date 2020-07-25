@@ -12,32 +12,32 @@ from pycocoevalcap.bleu.bleu import Bleu
 from pycocoevalcap.cider.cider import Cider
 from pycocoevalcap.rouge.rouge import Rouge
 
-def bleu(gts):    
-    scorer = Bleu(n=4)    
-    
-    all_scores = [ 0 for n in range(4) ]
-
-    num_cap_per_audio = len(gts[list(gts.keys())[0]])
-
-    for i in range(num_cap_per_audio):
-        if i > 0:
-            for key in gts:
-                gts[key].insert(0, res[key][0])
-        res = {key: [gts[key].pop(),] for key in gts}
-        score, scores = scorer.compute_score(gts, res)    
-        
-        for n in range(4):
-            all_scores[n] += score[n] * len(res)
-    
-    all_scores = np.array(all_scores) / len(res) / num_cap_per_audio
-    # for n in range(4):
-        # print('BLEU-{}: {:6.3f}'.format(n+1, all_scores[n]))
-    return all_scores
    
+def bleu(refs):
+    scorer = Bleu(n=4)
+    all_scores = np.array([ 0.0 for n in range(4) ])
+    num_cap_per_audio = len(refs[list(refs.keys())[0]])
+
+    # keys = np.random.choice(list(refs.keys()), 15, replace=False)
+    # for key in keys:
+        # np.random.shuffle(refs[key])
+
+    for i in range(num_cap_per_audio):
+        if i > 0:
+            for key in refs.keys():
+                refs[key].insert(0, hypo[key][0])                                                                                                                                        
+        hypo = {key: [refs[key].pop(),] for key in refs.keys()}
+        score, scores = scorer.compute_score(refs, hypo)
+
+        score = np.array(score)
+        all_scores += score
+
+    all_scores = all_scores / num_cap_per_audio
+    return all_scores                 
+
 def cider(gts):
-    scorer = Cider()    
     # scorer += (hypo[0], ref1)    
-    all_scores = 0
+    total_score = 0
 
     num_cap_per_audio = len(gts[list(gts.keys())[0]])
 
@@ -46,17 +46,16 @@ def cider(gts):
             for key in gts:
                 gts[key].insert(0, res[key][0])
         res = {key: [gts[key].pop(),] for key in gts}
+        scorer = Cider()    
         score, scores = scorer.compute_score(gts, res)    
         
-        all_scores += score * len(res)
+        total_score += score
     
-    score = all_scores / len(res) / num_cap_per_audio
-    # print('CIDEr: {:6.3f}'.format(all_scores))
+    score = total_score / num_cap_per_audio
     return score
    
 def rouge(gts):
-    scorer = Rouge()    
-    all_scores = 0
+    total_score = 0
     num_cap_per_audio = len(gts[list(gts.keys())[0]])
 
     for i in range(num_cap_per_audio):
@@ -64,11 +63,12 @@ def rouge(gts):
             for key in gts:
                 gts[key].insert(0, res[key][0])
         res = {key: [gts[key].pop(),] for key in gts}
+        scorer = Rouge()    
         score, scores = scorer.compute_score(gts, res)    
         
-        all_scores += score * len(res)
+        total_score += score
     
-    score = all_scores / len(res) / num_cap_per_audio
+    score = total_score / num_cap_per_audio
     # print('ROUGE: {:6.3f}'.format(all_scores))
     return score
    
