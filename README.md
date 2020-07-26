@@ -137,7 +137,7 @@ compute-fbank-feats --config=fbank_config/fbank.conf scp,p:`pwd`/hospital/wav.sc
 * Logmelspectrogram:
 
 ```bash
-python utils/featextract.py `find data/hospital/hospital_3707/ -type f` data/hospital/logmel.ark mfcc -win_length 1764 -hop_length 882
+python utils/featextract.py `cat data/hospital/wav.scp | awk '{print $2}'` data/hospital/logmel.ark mfcc -win_length 1764 -hop_length 882
 ```
 
 ## Training Configurator
