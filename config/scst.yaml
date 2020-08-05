@@ -1,8 +1,8 @@
-outputpath: experiments_cross_data
+outputpath: experiments/hospital
 
-feature_stream: copy-feats scp:data/fbank.scp ark:- |
-caption_file: data/train.json
-vocab_file: data/vocab_zh.pth
+feature_stream: copy-feats scp:data/hospital/fbank_dev.scp ark:- |
+caption_file: data/hospital/zh_dev.json
+vocab_file: data/hospital/vocab_zh.pth
 dataloader_args:
     batch_size: 32
     num_workers: 4
@@ -29,13 +29,11 @@ model: ScstModel
 model_args:
     embed_size: 256
     dropout: 0.3
-load_pretrained: True
-pretrained: experiments_cross_data/CaptionModel/2020-05-19_11-06-05_c046af32997d11eab6380cc47ae64a5e/saved.pth
 
 improvecriterion: score
 
 optimizer: Adam
 optimizer_args:
     lr: 0.00005
-epochs: 15
+epochs: 25
 

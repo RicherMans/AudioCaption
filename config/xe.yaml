@@ -1,6 +1,6 @@
-outputpath: experiments
+outputpath: experiments/hospital
 
-feature_stream: copy-feats scp:data/hospital/fbank.scp ark:- |
+feature_stream: copy-feats scp:data/hospital/fbank_dev.scp ark:- |
 caption_file: data/hospital/labels/zh_dev.json
 vocab_file: data/hospital/vocab_zh.pth
 dataloader_args:
@@ -20,16 +20,16 @@ encodermodel_args:
     use_hidden: True
     # Can be time, mean ( for last timestep, mean reduction)
     representation: mean
-    hidden_size: 1024
+    hidden_size: 512
 decodermodel: GRUDecoder
 decodermodel_args:
     num_layers: 1
-    hidden_size: 1024
+    hidden_size: 512
 model: CaptionModel
 model_args:
-    embed_size: 768
+    embed_size: 256
     dropout: 0.3
-pretrained_word_embedding: data/hospital/embeddings/bert_word_zh.npy
+#pretrained_word_embedding: data/hospital/embeddings/bert_word_zh.npy
 
 improvecriterion: loss # Can also be acc | loss
 teacher_forcing_ratio: 1.0
@@ -37,9 +37,9 @@ teacher_forcing_on_validation: False
 
 optimizer: Adam
 optimizer_args:
-    lr: 0.0004
+    lr: 0.0005
     weight_decay: 0.0
-epochs: 20
+epochs: 25
 early_stop: 5
 scheduler_args:
     mode: min

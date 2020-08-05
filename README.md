@@ -118,6 +118,7 @@ bash scripts/prepare_bert_server.sh <path-to-server> <num-workers> zh
 ```
 
 By default, server based on BERT base Chinese model is running in the background. You can change to other models by changing corresponding model name and path in `scripts/prepare_bert_server.sh`.
+
 To extract BERT word embeddings, you need to execute `utils/bert/create_word_embedding.py`, where the usage is shown.
 
 
