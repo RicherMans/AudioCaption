@@ -109,42 +109,56 @@ It requires at least `java` being installed on your machine. It is recommended t
 
 You can load pretrained word embeddings in Google [BERT](https://github.com/google-research/bert#pre-trained-models) instead of training word embeddings from scratch. The scripts in `utils/bert` need a BERT server in the background. We use BERT server from [bert-as-service](https://github.com/hanxiao/bert-as-service).
 
-To use bert-as-service, you need to first install the repository. It is recommended that you create a new environment with Tensorflow 1.3 to run BERT server since there is something wrong with this repository when using Tensorflow 2.x.
+To use bert-as-service, you need to first install the repository. It is recommended that you create a new environment with Tensorflow 1.3 to run BERT server since it is incompatible with Tensorflow 2.x.
 
 After successful installation of [bert-as-service](https://github.com/hanxiao/bert-as-service), downloading and running the BERT server needs to execute:
 
 ```bash
-bash scripts/prepare_bert_server.sh <path-to-server> <num-workers>
+bash scripts/prepare_bert_server.sh <path-to-server> <num-workers> zh
 ```
 
-By default, server based on BERT base Chinese model is running in the background. You can change to other models by changing corresponding model name and path in `srcipts/prepare_bert_server.sh`.
+By default, server based on BERT base Chinese model is running in the background. You can change to other models by changing corresponding model name and path in `scripts/prepare_bert_server.sh`.
+To extract BERT word embeddings, you need to execute `utils/bert/create_word_embedding.py`, where the usage is shown.
 
 
 ## Extract Features
 
-
 The kaldi scp format requires a tab or space separated line with the information: `FEATURENAME WAVEPATH`
 
-For example, to extract feature from hospital data:
+For example, to extract feature from hospital data, assume the raw data is placed in `DATA_DIR` (`data/hospital/wav` here) and you will store features in `FEATURE_DIR` (`data/hospital` here):
+
+```bash
+DATA_DIR=`pwd`/data/hospital/wav
+FEATURE_DIR=`pwd`/data/hospital
+PREFIX=hospital
+find $DATA_DIR -type f | awk -F[./] '{print "'$PREFIX'""_"$(NF-1),$0}' > $FEATURE_DIR/wav.scp
+```
 
 * Filterbank:
 
 ```bash
-find `pwd`/data/hospital/hospital_3707/ -type f | awk -F[./] '{print $(NF-1),$0}' > data/hospital/wav.scp
-compute-fbank-feats --config=fbank_config/fbank.conf scp,p:`pwd`/hospital/wav.scp ark:- | copy-feats ark:- ark,scp:`pwd`/hospital/fbank.ark,`pwd`/hospital/fbank.scp
+compute-fbank-feats --config=config/kaldi/fbank.conf scp,p:$FEATURE_DIR/wav.scp ark:- | copy-feats ark:- ark,scp:$FEATURE_DIR/fbank.ark,$FEATURE_DIR/fbank.scp
 ```
 
 * Logmelspectrogram:
 
 ```bash
-python utils/featextract.py `cat data/hospital/wav.scp | awk '{print $2}'` data/hospital/logmel.ark mfcc -win_length 1764 -hop_length 882
+python utils/featextract.py -prefix $PREFIX `cat $FEATURE_DIR/wav.scp | awk '{print $2}'` $FEATURE_DIR/tmp.ark mfcc -win_length 1764 -hop_length 882
+copy-feats ark:$FEATURE_DIR/tmp.ark ark,scp:$FEATURE_DIR/logmel.ark,$FEATURE_DIR/logmel.scp
+rm $FEATURE_DIR/tmp.ark
+```
+
+The kaldi scp file can be further split into a development scp and an evaluation scp:
+```bash
+python utils/split_scp.py $FEATURE_DIR/fbank.scp $FEATURE_DIR/zh_eval.json
+python utils/split_scp.py $FEATURE_DIR/logmel.scp $FEATURE_DIR/zh_eval.json
 ```
 
 ## Training Configurator
 
 Training configuration is done in `config/*.yaml`. Here one can adjust some hyperparameters e.g., number of hidden layers or embedding size. You can also write your own models in `models/*.py` and adjust the config to use that model (e.g. `encoder: MYMODEL`). 
 
-Note: All parameters within the `runners/*.py` script use exclusively parameters with the same name as their `.yaml` file counterpart. They can all be switched and changed on the fly by passing `--ARG VALUE`, e.g., if one wishes to switch the captions file to use english captions, pass `--caption_file data/hospital/en_dev.json`.
+Note: All parameters within the `runners/*.py` script use exclusively parameters with the same name as their `.yaml` file counterpart. They can all be switched and changed on the fly by passing `--ARG VALUE`, e.g., if one wishes to switch the captions file to use English captions, pass `--caption_file data/hospital/en_dev.json`.
 
 
 ## Training models
@@ -162,14 +176,12 @@ This will store the training logs and model checkpoints in `OUTPUTPATH/MODEL/TIM
 Predicting and evaluating is done by running `evaluate`:
 
 ```bash
-export kaldi_stream="copy-feats scp:data/hospital/fbank_eval.scp ark:- |"
+export kaldi_stream="copy-feats scp:$FEATURE_DIR/fbank_eval.scp ark:- |"
 export experiment_path=experiments/***
 python runners/run.py evaluate $experiment_path "$kaldi_stream" data/hospital/zh_eval.json
 ```
 
 Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets.
-
-BERT similarity score (proposed in [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448)) can also be calculated by `bert_evaluate` function in `runners/*.py`, with BERT server running in the background.
 
 
 

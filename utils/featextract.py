@@ -10,8 +10,8 @@ import numpy as np
 import argparse
 from tqdm import tqdm as tqdm
 
-sys.path.append("/mnt/lustre/sjtu/home/xnx98/utils")
-import kaldi_io
+sys.path.append(os.getcwd())
+import utils.kaldi_io as kaldi_io
 
 def extractmfcc(y, fs=44100, **mfcc_params):
     eps = np.spacing(1)
@@ -84,6 +84,7 @@ def extractraw(y, fs, **params):
 parser = argparse.ArgumentParser()
 """ Arguments: wavfilelist, n_mfcc, n_fft, win_length, hop_length, htk, fmin, fmax """
 parser.add_argument('-config', type=argparse.FileType('r'), default=None)
+parser.add_argument('-prefix', type=str, default='')
 parser.add_argument('wavfilelist', type=str, default=sys.stdin, nargs="+")
 parser.add_argument('out', type=argparse.FileType('wb'),
                     default=sys.stdout.buffer)
@@ -127,7 +128,7 @@ args = parser.parse_args()
 argsdict = vars(args)
 
 # Just for TQDM, usually its not that large anyway
-for line in tqdm(args.wavfilelist):
+for line in tqdm(args.wavfilelist, ascii=True):
     assert os.path.exists(line) and not line.endswith('scp'), "Passed only .scp file, you need to cat it e.g. python featextract.py `cat FILE`"
     y, sr = librosa.load(line, sr=None, mono=not args.nomono)
     # Stereo
@@ -137,5 +138,6 @@ for line in tqdm(args.wavfilelist):
         feat = args.extractfeat(y, sr, **argsdict)
     # Transpose feat, nsamples to nsamples, feat
     feat = np.vstack(feat).transpose()
-    kaldi_io.write_mat(args.out, feat, key=os.path.splitext(
-        os.path.basename(line.strip()))[0])
+    filename = os.path.splitext(os.path.basename(line.strip()))[0]
+    key = args.prefix + "_" + filename if args.prefix != '' else filename
+    kaldi_io.write_mat(args.out, feat, key=key)

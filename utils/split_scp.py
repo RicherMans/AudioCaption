@@ -13,10 +13,10 @@ def main(args):
     scp_filename = os.path.splitext(os.path.basename(scp_file))[0]
 
     if dev_output is None:
-        dev_output = os.path.join(os.path.dirname(scp_file), scp_filename + "_development.scp")
+        dev_output = os.path.join(os.path.dirname(scp_file), scp_filename + "_dev.scp")
 
     if eval_output is None:
-        eval_output = os.path.join(os.path.dirname(scp_file), scp_filename + "_evaluation.scp")
+        eval_output = os.path.join(os.path.dirname(scp_file), scp_filename + "_eval.scp")
 
     eval_df = pd.read_json(eval_caption_file)
     eval_keys = eval_df["key"].apply(str).unique()
@@ -34,8 +34,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scp-file", type=str, required=True)
-    parser.add_argument("--eval-caption-file", type=str, required=True)
+    parser.add_argument("scp_file", type=str)
+    parser.add_argument("eval_caption_file",type=str)
     parser.add_argument("--dev-output", type=str, default=None)
     parser.add_argument("--eval-output", type=str, default=None)
 

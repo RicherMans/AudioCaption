@@ -112,8 +112,6 @@ runs/*
 experiments*/*
 
 # Data files
-data/car/car_3602/*
-data/hospital/hospital_3707/*
 data/*/*.scp
 data/*/*.ark
 data/*/*.hdf5
