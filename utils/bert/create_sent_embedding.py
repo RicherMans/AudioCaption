@@ -1,51 +1,67 @@
-import torch
-from tensorboardX import SummaryWriter
-import pandas as pd
-import numpy as np
-import os
-from bert_serving.client import BertClient
-from tqdm import tqdm
 import pickle
 import fire
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
 
-def main(caption_file: str, output: str, train: bool=True):
-    df = pd.read_json(caption_file)
-    bc = BertClient()
-    embeddings = {}
+class EmbeddingExtractor(object):
 
-    if train:
-        with tqdm(total=df.shape[0]) as pbar:
-            for idx, row in df.iterrows():
-                caption = row["caption"]
-                key = row["key"]
-                caption_index = row["caption_index"]
-                embeddings["{}_{}".format(key, caption_index)] = bc.encode([caption]).reshape(-1)
-                pbar.update()
+    def extract_sentbert(self, caption_file: str, output: str, dev: bool=True, zh: bool=False):
+        from sentence_transformers import SentenceTransformer
+        lang2model = {
+            "zh": "distiluse-base-multilingual-cased",
+            "en": "bert-base-nli-mean-tokens"
+        }
+        lang = "zh" if zh else "en"
+        model = SentenceTransformer(lang2model[lang])
 
-    else:
-        dump = {}
+        self.extract(caption_file, model, output, dev)
 
-        for i in tqdm(range(len(df))):
-            sub_df = df.iloc[i]
-            key = sub_df["key"]
-            caption = sub_df.caption
-            value = bc.encode([caption])
+    def extract_originbert(self, caption_file: str, output: str, dev: bool=True, ip="localhost"):
+        from bert_serving.client import BertClient
+        caption_df = pd.read_json(caption_file, dtype={"key": str})
+        client = BertClient(ip)
+        
+        self.extract(caption_file, client, output, dev)
 
-            if key not in embeddings.keys():
-                embeddings[key] = [value]
-            else:
-                embeddings[key].append(value)
-            
-        for key in embeddings:
-            dump[key] = np.concatenate(embeddings[key])
+    def extract(self, caption_file: str, model, output, dev: bool):
+        caption_df = pd.read_json(caption_file, dtype={"key": str})
+        embeddings = {}
 
-        embeddings = dump
+        if dev:
+            with tqdm(total=caption_df.shape[0], ascii=True) as pbar:
+                for idx, row in caption_df.iterrows():
+                    caption = row["caption"]
+                    key = row["key"]
+                    caption_index = row["caption_index"]
+                    embeddings["{}_{}".format(key, caption_index)] = np.array(model.encode([caption])).reshape(-1)
+                    pbar.update()
 
-    with open(output, 'wb') as f:
-        pickle.dump(embeddings, f)
+        else:
+            dump = {}
 
+            with tqdm(total=caption_df.shape[0], ascii=True) as pbar:
+                for idx, row in caption_df.iterrows():
+                    key = row["key"]
+                    caption = row["caption"]
+                    value = np.array(model.encode([caption])).reshape(-1)
 
-if __name__ == '__main__':
-    fire.Fire(main)
+                    if key not in embeddings.keys():
+                        embeddings[key] = [value]
+                    else:
+                        embeddings[key].append(value)
 
+                    pbar.update()
+                
+            for key in embeddings:
+                dump[key] = np.stack(embeddings[key])
+
+            embeddings = dump
+
+        with open(output, "wb") as f:
+            pickle.dump(embeddings, f)
+        
+
+if __name__ == "__main__":
+    fire.Fire(EmbeddingExtractor)

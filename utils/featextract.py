@@ -8,9 +8,10 @@ import sys
 import librosa
 import numpy as np
 import argparse
-import kaldi_io
 from tqdm import tqdm as tqdm
 
+sys.path.append("/mnt/lustre/sjtu/home/xnx98/utils")
+import kaldi_io
 
 def extractmfcc(y, fs=44100, **mfcc_params):
     eps = np.spacing(1)

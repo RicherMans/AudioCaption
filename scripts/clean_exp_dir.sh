@@ -10,7 +10,7 @@ experiment_root=$1
 
 if [ ! $experiment_root ]; then
     echo "need experiment root directory!"
-else
+else 
     for experiment_dir in $(ls $experiment_root)
     do
         num_files=$(ls $experiment_root/$experiment_dir | wc -l)
@@ -20,3 +20,4 @@ else
         fi
     done
 fi
+

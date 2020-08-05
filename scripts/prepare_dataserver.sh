@@ -14,14 +14,16 @@ dataserver=$1
 
 cd $dataserver
 
-[ ! -d stanford-corenlp-full-2018-10-05 ] && wget http://nlp.stanford.edu/software/stanford-corenlp-full-2018-10-05.zip && unzip stanford-corenlp-full-2018-10-05.zip
+if [ ! -d stanford-corenlp-full-2018-10-05 ]; then
+    [ ! -f stanford-corenlp-full-2018-10-05.zip ] && wget http://nlp.stanford.edu/software/stanford-corenlp-full-2018-10-05.zip 
+    unzip stanford-corenlp-full-2018-10-05.zip
+fi
 
 cd stanford-corenlp-full-2018-10-05
 
 [ ! -f stanford-chinese-corenlp-2018-10-05-models.jar ] && wget http://nlp.stanford.edu/software/stanford-chinese-corenlp-2018-10-05-models.jar
 
 [ ! -f StanfordCoreNLP-chinese.properties ] && wget https://raw.githubusercontent.com/stanfordnlp/CoreNLP/master/src/edu/stanford/nlp/pipeline/StanfordCoreNLP-chinese.properties
-
 
 java -Xmx4g -cp "*" edu.stanford.nlp.pipeline.StanfordCoreNLPServer \
 -serverProperties StanfordCoreNLP-chinese.properties \

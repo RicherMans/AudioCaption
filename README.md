@@ -10,7 +10,7 @@ git clone https://www.github.com/Richermans/AudioCaption
 
 # Dataset
 
-For all datasets, labels are provided in the directory `data/*/labels`.
+For all datasets, labels are provided in the directory `data/*.json`.
 
 ## AudioCaption
 
@@ -159,12 +159,12 @@ This will store the training logs and model checkpoints in `OUTPUTPATH/MODEL/TIM
 
 ## Predicting and Evaluating
 
-Predicting and evaluating is done by running `coco_evaluate` function in `runners/*.py`:
+Predicting and evaluating is done by running `evaluate`:
 
 ```bash
 export kaldi_stream="copy-feats scp:data/hospital/fbank_eval.scp ark:- |"
 export experiment_path=experiments/***
-python runners/run.py coco_evaluate $experiment_path "$kaldi_stream" data/hospital/zh_eval.json
+python runners/run.py evaluate $experiment_path "$kaldi_stream" data/hospital/zh_eval.json
 ```
 
 Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets.
