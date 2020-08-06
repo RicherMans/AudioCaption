@@ -2,13 +2,12 @@ import os
 import re
 import sys
 sys.path.append(os.getcwd())
-sys.path.append("/mnt/lustre/sjtu/home/xnx98/utils")
 
 import pandas as pd
 import numpy as np
 import torch
 
-import kaldi_io as kaldi_io
+import utils.kaldi_io as kaldi_io
 from utils.build_vocab import Vocabulary
 
 

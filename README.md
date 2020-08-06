@@ -179,7 +179,7 @@ Predicting and evaluating is done by running `evaluate`:
 ```bash
 export kaldi_stream="copy-feats scp:$FEATURE_DIR/fbank_eval.scp ark:- |"
 export experiment_path=experiments/***
-python runners/run.py evaluate $experiment_path "$kaldi_stream" data/hospital/zh_eval.json
+python runners/run.py evaluate $experiment_path "$kaldi_stream" $FEATURE_DIR/zh_eval.json
 ```
 
 Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets.

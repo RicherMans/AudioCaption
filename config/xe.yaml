@@ -1,11 +1,14 @@
 outputpath: experiments/hospital
 
-feature_stream: copy-feats scp:data/hospital/fbank_dev.scp ark:- |
-caption_file: data/hospital/labels/zh_dev.json
+feature_stream: copy-feats scp:data/hospital/logmel_dev.scp ark:- |
+caption_file: data/hospital/zh_dev.json
 vocab_file: data/hospital/vocab_zh.pth
+zh: True
 dataloader_args:
     batch_size: 32
     num_workers: 4
+train_percent: 90
+augments: []
 
 scaler: StandardScaler # Can be any of sklearn.preprocessing that supports fit_partial
 scaler_args:
@@ -17,7 +20,7 @@ encodermodel_args:
     num_layers: 1
     dropout: 0.0
     # Enables the passing of the hidden encoder state to the decoder
-    use_hidden: True
+    use_hidden: False
     # Can be time, mean ( for last timestep, mean reduction)
     representation: mean
     hidden_size: 512
@@ -31,7 +34,7 @@ model_args:
     dropout: 0.3
 #pretrained_word_embedding: data/hospital/embeddings/bert_word_zh.npy
 
-improvecriterion: loss # Can also be acc | loss
+improvecriterion: score # Can be acc | loss | score
 teacher_forcing_ratio: 1.0
 teacher_forcing_on_validation: False
 

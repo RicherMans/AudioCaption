@@ -81,18 +81,16 @@ class Runner(BaseRunner):
         targets = torch.nn.utils.rnn.pack_padded_sequence(
             caps, cap_lens, batch_first=True).data
 
-        output = {}
 
         if kwargs["tf"]:
-            probs = model(feats, feat_lens, caps, cap_lens, mode="forward")
+            output = model(feats, feat_lens, caps, cap_lens, mode="forward")
         else:
-            sampled = model(feats, feat_lens, mode="sample", max_length=max(cap_lens))
+            output = model(feats, feat_lens, mode="sample", max_length=max(cap_lens))
             probs = torch.nn.utils.rnn.pack_padded_sequence(
-                sampled["probs"], cap_lens, batch_first=True).data
+                output["probs"], cap_lens, batch_first=True).data
             probs = convert_tensor(probs, device=self.device, non_blocking=True)
-            output["seqs"] = sampled["seqs"]
+            output["probs"] = probs
 
-        output["probs"] = probs
         output["targets"] = targets
 
         return output

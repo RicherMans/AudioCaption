@@ -1,11 +1,9 @@
-from nltk.parse.corenlp import CoreNLPParser
 from tqdm import tqdm
 import pandas as pd
 import logging
 import torch
 from collections import Counter
 import re
-from zhon.hanzi import punctuation
 import fire
 
 class Vocabulary(object):
@@ -30,6 +28,8 @@ class Vocabulary(object):
         return len(self.word2idx)
 
 def build_vocab(json:str, threshold:int, keeppunctuation: bool, host_address:str, character_level:bool=False, zh:bool=True ):
+    from nltk.parse.corenlp import CoreNLPParser
+    from zhon.hanzi import punctuation
     """Build vocabulary from csv file with a given threshold to drop all counts < threshold
 
     Args:
@@ -49,7 +49,7 @@ def build_vocab(json:str, threshold:int, keeppunctuation: bool, host_address:str
     
     if zh:
         parser = CoreNLPParser(host_address)
-        for i in tqdm(range(len(df)), leave=False):
+        for i in tqdm(range(len(df)), leave=False, ascii=True):
             caption = str(df.loc[i]['caption'])
             # Remove all punctuations
             if not keeppunctuation:
@@ -61,7 +61,7 @@ def build_vocab(json:str, threshold:int, keeppunctuation: bool, host_address:str
             counter.update(tokens)
     else:
         punctuation = ',.()'
-        for i in tqdm(range(len(df)), leave=False):
+        for i in tqdm(range(len(df)), leave=False, ascii=True):
             caption = str(df.loc[i]['caption'])
             # Remove all punctuations
             if not keeppunctuation:
