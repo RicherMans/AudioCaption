@@ -6,7 +6,6 @@ import datetime
 import random
 import uuid
 
-from tqdm import tqdm
 import fire
 import numpy as np
 import pandas as pd
@@ -23,7 +22,6 @@ import models
 import utils.train_util as train_util
 from utils.build_vocab import Vocabulary
 from runners.base_runner import BaseRunner
-import utils.score_util as score_util
 from datasets.SJTUDataSet import SJTUDataset, SJTUDatasetEval, collate_fn
 
 class Runner(BaseRunner):
@@ -31,41 +29,44 @@ class Runner(BaseRunner):
     @staticmethod
     def _get_model(config, vocab_size):
         embed_size = config["model_args"]["embed_size"]
-        encodermodel = getattr(
-            models.encoder, config["encodermodel"])(
-            inputdim=config["inputdim"],
-            embed_size=embed_size,
-            **config["encodermodel_args"])
-        if "pretrained_encoder" in config:
-            encoder_state_dict = torch.load(
-                config["pretrained_encoder"],
-                map_location="cpu")
-            encodermodel.load_state_dict(encoder_state_dict)
+        if config["encodermodel"] == "E2EASREncoder":
+            encodermodel = models.encoder.load_espnet_encoder(config["pretrained_encoder"])
+        else:
+            encodermodel = getattr(
+                models.encoder, config["encodermodel"])(
+                inputdim=config["inputdim"],
+                embed_size=embed_size,
+                **config["encodermodel_args"])
+            if "pretrained_encoder" in config:
+                encoder_state_dict = torch.load(
+                    config["pretrained_encoder"],
+                    map_location="cpu")
+                encodermodel.load_state_dict(encoder_state_dict, strict=False)
 
         decodermodel = getattr(
             models.decoder, config["decodermodel"])(
             vocab_size=vocab_size,
-            embed_size=embed_size,
+            input_size=embed_size,
             **config["decodermodel_args"])
         model = getattr(
             models.WordModel, config["model"])(encodermodel, decodermodel, **config["model_args"])
         return model
 
-    def _forward(self, model, batch, mode="train", **kwargs):
-        assert mode in ("train", "sample")
+    def _forward(self, model, batch, mode, **kwargs):
+        assert mode in ("train", "validation", "eval")
+        kwargs["mode"] = mode
 
-        if mode == "sample":
+        if mode == "eval":
             feats = batch[1]
             feat_lens = batch[-1]
 
             feats = convert_tensor(feats.float(),
                                    device=self.device,
                                    non_blocking=True)
-            sampled = model(feats, feat_lens, mode="sample", **kwargs)
-            return sampled
+            output = model(feats, feat_lens, **kwargs)
+            return output
 
         # mode is "train"
-        assert "tf" in kwargs, "need to know whether to use teacher forcing"
 
         feats = batch[0]
         caps = batch[1]
@@ -81,18 +82,14 @@ class Runner(BaseRunner):
         targets = torch.nn.utils.rnn.pack_padded_sequence(
             caps, cap_lens, batch_first=True).data
 
+        output = model(feats, feat_lens, caps, cap_lens, **kwargs)
 
-        if kwargs["tf"]:
-            output = model(feats, feat_lens, caps, cap_lens, mode="forward")
-        else:
-            output = model(feats, feat_lens, mode="sample", max_length=max(cap_lens))
-            probs = torch.nn.utils.rnn.pack_padded_sequence(
-                output["probs"], cap_lens, batch_first=True).data
-            probs = convert_tensor(probs, device=self.device, non_blocking=True)
-            output["probs"] = probs
+        packed_logits = torch.nn.utils.rnn.pack_padded_sequence(
+            output["logits"], cap_lens, batch_first=True).data
+        packed_logits = convert_tensor(packed_logits, device=self.device, non_blocking=True)
 
+        output["packed_logits"] = packed_logits
         output["targets"] = targets
-
         return output
 
     def train(self, config, **kwargs):
@@ -117,8 +114,8 @@ class Runner(BaseRunner):
             n_saved=1,
             require_empty=False,
             create_dir=True,
-            score_function=lambda engine: -engine.state.metrics["loss"],
-            score_name="loss")
+            score_function=lambda engine: engine.state.metrics["score"],
+            score_name="score")
 
         logger = train_util.genlogger(os.path.join(outputdir, "train.log"))
         # print passed config parameters
@@ -127,13 +124,13 @@ class Runner(BaseRunner):
 
         zh = config_parameters["zh"]
         vocabulary = torch.load(config_parameters["vocab_file"])
-        trainloader, cvloader, info = self._get_dataloaders(config_parameters, vocabulary)
+        train_loader, val_loader, info = self._get_dataloaders(config_parameters, vocabulary)
         config_parameters["inputdim"] = info["inputdim"]
-        cv_key2refs = info["cv_key2refs"]
+        val_key2refs = info["val_key2refs"]
         logger.info("<== Estimating Scaler ({}) ==>".format(info["scaler"].__class__.__name__))
         logger.info(
-            "Stream: {} Input dimension: {} Vocab Size: {}".format(
-                config_parameters["feature_stream"], info["inputdim"], len(vocabulary)))
+            "Feature: {} Input dimension: {} Vocab Size: {}".format(
+                config_parameters["feature_file"], info["inputdim"], len(vocabulary)))
 
         model = self._get_model(config_parameters, len(vocabulary))
         if "pretrained_word_embedding" in config_parameters:
@@ -149,15 +146,16 @@ class Runner(BaseRunner):
 
         criterion = torch.nn.CrossEntropyLoss().to(self.device)
         crtrn_imprvd = train_util.criterion_improver(config_parameters['improvecriterion'])
-        tf_ratio = config_parameters["teacher_forcing_ratio"]
 
         def _train_batch(engine, batch):
             model.train()
-            tf = True if random.random() < tf_ratio else False
             with torch.enable_grad():
                 optimizer.zero_grad()
-                output = self._forward(model, batch, tf=tf)
-                loss = criterion(output["probs"], output["targets"])
+                output = self._forward(
+                    model, batch, "train",
+                    ss_ratio=config_parameters["scheduled_sampling_args"]["ss_ratio"]
+                )
+                loss = criterion(output["packed_logits"], output["targets"]).to(self.device)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
                 optimizer.step()
@@ -166,7 +164,7 @@ class Runner(BaseRunner):
 
         trainer = Engine(_train_batch)
         RunningAverage(output_transform=lambda x: x["loss"]).attach(trainer, "running_loss")
-        pbar = ProgressBar(persist=False, ascii=True)
+        pbar = ProgressBar(persist=False, ascii=True, ncols=100)
         pbar.attach(trainer, ["running_loss"])
 
         key2pred = {}
@@ -175,7 +173,7 @@ class Runner(BaseRunner):
             model.eval()
             keys = batch[2]
             with torch.no_grad():
-                output = self._forward(model, batch, tf=config_parameters["teacher_forcing_on_validation"])
+                output = self._forward(model, batch, "validation") 
                 seqs = output["seqs"].cpu().numpy()
                 for (idx, seq) in enumerate(seqs):
                     if keys[idx] in key2pred:
@@ -185,8 +183,8 @@ class Runner(BaseRunner):
                 return output
 
         metrics = {
-            "loss": Loss(criterion, output_transform=lambda x: (x["probs"], x["targets"])),
-            "accuracy": Accuracy(output_transform=lambda x: (x["probs"], x["targets"])),
+            "loss": Loss(criterion, output_transform=lambda x: (x["packed_logits"], x["targets"])),
+            "accuracy": Accuracy(output_transform=lambda x: (x["packed_logits"], x["targets"])),
         }
 
         evaluator = Engine(_inference)
@@ -198,29 +196,33 @@ class Runner(BaseRunner):
             key2pred.clear()
 
         evaluator.add_event_handler(
-            Events.EPOCH_COMPLETED, eval_cv, key2pred, cv_key2refs)
+            Events.EPOCH_COMPLETED, eval_cv, key2pred, val_key2refs)
 
         for name, metric in metrics.items():
             metric.attach(trainer, name)
             metric.attach(evaluator, name)
 
         trainer.add_event_handler(
-              Events.EPOCH_COMPLETED, train_util.log_results, evaluator, cvloader,
+              Events.EPOCH_COMPLETED, train_util.log_results, evaluator, val_loader,
               logger.info, metrics.keys(), ["loss", "accuracy", "score"])
+
+        if config_parameters["scheduled_sampling"]:
+            trainer.add_event_handler(
+                Events.GET_BATCH_COMPLETED, train_util.update_ss_ratio, config_parameters, len(train_loader))
 
         evaluator.add_event_handler(
             Events.EPOCH_COMPLETED, train_util.save_model_on_improved, crtrn_imprvd,
             "score", {
-                "model": model,
+                "model": model.state_dict(),
                 "config": config_parameters,
                 "scaler": info["scaler"]
         }, os.path.join(outputdir, "saved.pth"))
 
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        # optimizer, **config_parameters['scheduler_args'])
-        # evaluator.add_event_handler(
-            # Events.EPOCH_COMPLETED, train_util.update_reduce_on_plateau,
-            # scheduler, "score")
+        scheduler = getattr(torch.optim.lr_scheduler, config_parameters["scheduler"])(
+            optimizer, **config_parameters["scheduler_args"])
+        evaluator.add_event_handler(
+            Events.EPOCH_COMPLETED, train_util.update_lr,
+            scheduler, "score")
 
         evaluator.add_event_handler(
             Events.EPOCH_COMPLETED, checkpoint_handler, {
@@ -234,7 +236,7 @@ class Runner(BaseRunner):
             # trainer=trainer)
         # evaluator.add_event_handler(Events.COMPLETED, early_stop_handler)
 
-        trainer.run(trainloader, max_epochs=config_parameters["epochs"])
+        trainer.run(train_loader, max_epochs=config_parameters["epochs"])
         return outputdir
 
 

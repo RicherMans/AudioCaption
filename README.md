@@ -36,12 +36,12 @@ If you need a proxy to download the dataset, we recommend using [Proxychains](ht
 
 The dataset on car scene can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
 
-The source code and dataset in the paper [What does a car-sette tape tell?](http://arxiv.org/abs/1905.13448) is also provided here.
+The source code for the proposed [sentence-level loss](http://arxiv.org/abs/1905.13448) is also provided here.
 
 # Related Papers
 Here are papers related to this repository:
 * [Audio Caption: Listen And Tell](https://arxiv.org/abs/1902.09254)
-* [What Does A Car-sette Tape Tell?](http://arxiv.org/abs/1905.13448)
+* [Audio Caption in a Car Setting with a Sentence-Level Loss](http://arxiv.org/abs/1905.13448)
 
 If you'd like to use the AudioCaption dataset, please cite:
 ```
@@ -138,15 +138,15 @@ find $DATA_DIR -type f | awk -F[./] '{print "'$PREFIX'""_"$(NF-1),$0}' > $FEATUR
 * Filterbank:
 
 ```bash
-compute-fbank-feats --config=config/kaldi/fbank.conf scp,p:$FEATURE_DIR/wav.scp ark:- | copy-feats ark:- ark,scp:$FEATURE_DIR/fbank.ark,$FEATURE_DIR/fbank.scp
+compute-fbank-feats --config=config/kaldi/fbank.conf scp:$FEATURE_DIR/wav.scp ark:$FEATURE_DIR/fbank.ark
+python utils/copyark2hdf5.py $FEATURE_DIR/fbank.ark $FEATURE_DIR/fbank.hdf5
+rm $FEATURE_DIR/fbank.ark
 ```
 
 * Logmelspectrogram:
 
 ```bash
-python utils/featextract.py -prefix $PREFIX `cat $FEATURE_DIR/wav.scp | awk '{print $2}'` $FEATURE_DIR/tmp.ark mfcc -win_length 1764 -hop_length 882
-copy-feats ark:$FEATURE_DIR/tmp.ark ark,scp:$FEATURE_DIR/logmel.ark,$FEATURE_DIR/logmel.scp
-rm $FEATURE_DIR/tmp.ark
+python utils/featextract.py -prefix $PREFIX `cat $FEATURE_DIR/wav.scp | awk '{print $2}'` $FEATURE_DIR/logmel.hdf5 $FEATURE_DIR/logmel.scp mfcc -win_length 1764 -hop_length 882
 ```
 
 The kaldi scp file can be further split into a development scp and an evaluation scp:

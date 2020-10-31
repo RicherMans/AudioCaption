@@ -3,6 +3,7 @@
 import copy
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BaseEncoder(nn.Module):
@@ -238,6 +239,7 @@ class CRNNEncoder(BaseEncoder):
 
     def forward(self, *input):
         x, lens = input
+        lens = copy.deepcopy(lens)
         lens = torch.as_tensor(lens)
         N, T, _ = x.shape
         x = x.unsqueeze(1)
@@ -256,23 +258,107 @@ class CRNNEncoder(BaseEncoder):
         mask = (idxs < lens.view(-1, 1)).to(x.device)
         # mask: [N, T]
 
-        x1 = x * mask.unsqueeze(-1)
-        x_mean = x1.sum(1) / lens.unsqueeze(1).to(x.device)
+        x_mean_time = x * mask.unsqueeze(-1)
+        x_mean = x_mean_time.sum(1) / lens.unsqueeze(1).to(x.device)
 
-        # x2 = x
-        # x2[~mask] = float("-inf")
-        # x_max, _ = x2.max(1)
+        # x_max = x
+        # x_max[~mask] = float("-inf")
+        # x_max, _ = x_max.max(1)
         # out = x_mean + x_max
 
         out = x_mean
 
-        return out, None
+        return {
+            "audio_embeds": out,
+            "audio_embeds_time": x_mean_time,
+            "state": None,
+            "audio_embeds_lens": lens
+        }
 
+
+class CNN10QEncoder(BaseEncoder):
+
+    def __init__(self, inputdim, embed_size, **kwargs):
+        super(CNN10QEncoder, self).__init__(inputdim, embed_size)
+        self.use_hidden = False
+        assert embed_size == 512, "pretrained CNN10Q only supports output feature dimension 512"
+
+        def _block(in_channel, out_channel):
+            return nn.Sequential(
+                nn.Conv2d(in_channel,
+                          out_channel,
+                          kernel_size=3,
+                          bias=False,
+                          padding=1),
+                nn.BatchNorm2d(out_channel),
+                nn.ReLU(True),
+                nn.Conv2d(out_channel,
+                          out_channel,
+                          kernel_size=3,
+                          bias=False,
+                          padding=1),
+                nn.BatchNorm2d(out_channel),
+                nn.ReLU(True),
+            )
+
+        self.features = nn.Sequential(
+            _block(1, 64),
+            nn.AvgPool2d((2, 2)),
+            nn.Dropout(0.2, True),
+            _block(64, 128),
+            nn.AvgPool2d((2, 2)),
+            nn.Dropout(0.2, True),
+            _block(128, 256),
+            nn.AvgPool2d((2, 2)),
+            nn.Dropout(0.2, True),
+            _block(256, 512),
+            nn.AvgPool2d((2, 2)),
+            nn.Dropout(0.2, True),
+            nn.AdaptiveAvgPool2d((None, 1)),
+        )
+        self.init_bn = nn.BatchNorm2d(inputdim)
+        # self.outputlayer = nn.Linear(512, outputdim)
+        self.embedding = nn.Linear(512, 512)
+
+    def forward(self, *input):
+        x, lens = input
+        lens = copy.deepcopy(lens)
+        lens = torch.as_tensor(lens)
+        N = x.size(0)
+        x = x.unsqueeze(1)  # N x 1 x T x D
+        x = x.transpose(1, 3)
+        x = self.init_bn(x)
+        x = x.transpose(1, 3)
+        x = self.features(x)
+        x = x.transpose(1, 2).contiguous().flatten(-2)
+        # x = x.mean(1) + x.max(1)[0]
+
+        lens /= 16
+        idxs = torch.arange(x.size(1), device="cpu").repeat(N).view(N, x.size(1))
+        mask = (idxs < lens.view(-1, 1)).to(x.device)
+
+        x_mean = x * mask.unsqueeze(-1)
+        x_mean = x_mean.sum(1) / lens.unsqueeze(1).to(x.device)
+
+        x_max = x.clone()
+        x_max[~mask] = float("-inf")
+        x_max, _ = x_max.max(1)
+        out = x_mean + x_max
+
+        out = F.dropout(out, p=0.5, training=self.training)
+        out = self.embedding(out)
+        return {
+            "audio_embeds": out,
+            "audio_embeds_time": x,
+            "state": None,
+            "audio_embeds_lens": lens
+        }
 
 class CNN10Encoder(BaseEncoder):
 
     def __init__(self, inputdim, embed_size, **kwargs):
         super(CNN10Encoder, self).__init__(inputdim, embed_size)
+        assert embed_size == 512, "pretrained CNN10 only supports output feature dimension 512"
         self.use_hidden = False
         self.features = nn.Sequential(
             Block2D(1, 64),
@@ -291,12 +377,12 @@ class CNN10Encoder(BaseEncoder):
             nn.AdaptiveAvgPool2d((None, 1)),
         )
 
-        self.temp_pool = parse_poolingfunction(kwargs.get('temppool', 'attention'),
-                                               inputdim=512,
-                                               outputdim=embed_size)
-        self.outputlayer = nn.Linear(512, embed_size)
+        # self.temp_pool = parse_poolingfunction(kwargs.get('temppool', 'attention'),
+                                               # inputdim=512,
+                                               # outputdim=embed_size)
+        # self.outputlayer = nn.Linear(512, embed_size)
         self.features.apply(self.init_weights)
-        self.outputlayer.apply(self.init_weights)
+        # self.outputlayer.apply(self.init_weights)
 
     def forward(self, *input):
         x, lens = input
@@ -305,15 +391,29 @@ class CNN10Encoder(BaseEncoder):
         x = x.unsqueeze(1)
         x = self.features(x)
         x = x.transpose(1, 2).contiguous().flatten(-2)
-        decison_time = self.outputlayer(x)
+        # decison_time = self.outputlayer(x)
         # decison_time = nn.functional.interpolate(
             # decison_time.transpose(1, 2),
             # time,
             # mode='linear',
             # align_corners=False).transpose(1, 2)
-        x = self.temp_pool(x, decison_time).squeeze(1)
+        # x = self.temp_pool(x, decison_time).squeeze(1)
 
-        return x, None 
+        N = x.size(0)
+        lens /= 4
+        idxs = torch.arange(x.size(1), device="cpu").repeat(N).view(N, x.size(1))
+        mask = (idxs < lens.view(-1, 1)).to(x.device)
+
+        x_mean = x * mask.unsqueeze(-1)
+        x_mean = x_mean.sum(1) / lens.unsqueeze(1).to(x.device)
+
+        out = x_mean
+        return {
+            "audio_embeds": out,
+            "audio_embeds_time": x,
+            "state": None,
+            "audio_embeds_lens": lens
+        }
 
 
 class CNN10CRNNEncoder(BaseEncoder):
@@ -332,18 +432,19 @@ class CNN10CRNNEncoder(BaseEncoder):
         return out, None
 
 
-class GRUEncoder(BaseEncoder):
+class RNNEncoder(BaseEncoder):
 
     def __init__(self, inputdim, embed_size, **kwargs):
-        super(GRUEncoder, self).__init__(inputdim, embed_size)
+        super(RNNEncoder, self).__init__(inputdim, embed_size)
         hidden_size = kwargs.get('hidden_size', 256)
         bidirectional = kwargs.get('bidirectional', False)
         num_layers = kwargs.get('num_layers', 1)
         dropout = kwargs.get('dropout', 0.3)
+        rnn_type = kwargs.get('rnn_type', "GRU")
         self.representation = kwargs.get('representation', 'time')
         assert self.representation in ('time', 'mean')
         self.use_hidden = kwargs.get('use_hidden', False)
-        self.network = nn.GRU(
+        self.network = getattr(nn, rnn_type)(
             inputdim,
             hidden_size,
             num_layers=num_layers,
@@ -362,63 +463,29 @@ class GRUEncoder(BaseEncoder):
         packed = nn.utils.rnn.pack_padded_sequence(x, lens, batch_first=True, enforce_sorted=False)
         packed_out, hid = self.network(packed)
         # hid: [num_layers, N, hidden]
-        out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
+        out_time, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
         # out: [N, T, hidden]
         if not self.use_hidden:
             hid = None
         if self.representation == 'mean':
-            out = out.sum(1)
-            lens = lens.reshape(-1, 1).expand(*out.size()).to(out.device)
-            out = out / lens.float()
+            N = x.size(0)
+            idxs = torch.arange(x.size(1), device="cpu").repeat(N).view(N, x.size(1))
+            mask = (idxs < lens.view(-1, 1)).to(x.device)
+            # mask: [N, T]
+            out = out_time * mask.unsqueeze(-1)
+            out = out.sum(1) / lens.unsqueeze(1).to(x.device)
         elif self.representation == 'time':
             indices = (lens - 1).reshape(-1, 1, 1).expand(-1, 1, out.size(-1))
             # indices: [N, 1, hidden]
-            out = torch.gather(out, 1, indices).squeeze(1)
+            out = torch.gather(out_time, 1, indices).squeeze(1)
 
-        return self.bn(self.outputlayer(out)), hid
-
-
-class LSTMEncoder(BaseEncoder):
-
-    def __init__(self, inputdim, embed_size, **kwargs):
-        super(LSTMEncoder, self).__init__(inputdim, embed_size)
-        hidden_size = kwargs.get('hidden_size', 256)
-        bidirectional = kwargs.get('bidirectional', False)
-        num_layers = kwargs.get('num_layers', 1)
-        self.representation = kwargs.get('representation', 'time')
-        assert self.representation in ('time', 'mean')
-        self.use_hidden = kwargs.get('use_hidden', True)
-        self.network = nn.LSTM(
-            inputdim,
-            hidden_size,
-            num_layers=num_layers,
-            bidirectional=bidirectional,
-            batch_first=True)
-        self.outputlayer = nn.Linear(
-            hidden_size * (bidirectional + 1), embed_size)
-        self.init()
-
-    def forward(self, *input):
-        x, lens = input
-        lens = torch.as_tensor(lens)
-        # x: [N, T, D]
-        packed = nn.utils.rnn.pack_padded_sequence(x, lens, batch_first=True, enforce_sorted=False)
-        packed_out, hid = self.network(packed)
-        out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
-        # out: [N, T, E]
-        if not self.use_hidden:
-            hid = None
-        # TODO maybe something wrong with the use of rnn, when num_layers > 1 / bidirectional = True
-        if self.representation == 'mean':
-            out = out.sum(1)
-            lens = lens.reshape(-1, 1).expand(*out.size()).to(out.device)
-            out = out / lens.float()
-        elif self.representation == 'time':
-            indices = (lens - 1).reshape(-1, 1, 1).expand(-1, 1, out.size(-1))
-            # indices: [N, 1, E]
-            out = torch.gather(out, 1, indices).squeeze(1)
-
-        return self.outputlayer(out), hid
+        out = self.bn(self.outputlayer(out))
+        return {
+            "audio_embeds": out,
+            "audio_embeds_time": out_time,
+            "state": hid,
+            "audio_embeds_lens": lens
+        }
 
 
 if __name__ == "__main__":
