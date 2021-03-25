@@ -9,5 +9,5 @@ tableprint==0.8.0
 fire==0.3.0
 zhon==1.1.5
 scikit_learn==0.21.3
-PyYAML==5.1.2
+PyYAML==5.4
 gensim==3.8.3
