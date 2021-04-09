@@ -3,17 +3,14 @@
 import os
 import sys
 import datetime
-import random
 import uuid
 
 import fire
 import numpy as np
-import pandas as pd
-import sklearn.preprocessing as pre
 import torch
 from ignite.engine.engine import Engine, Events
-from ignite.metrics import Accuracy, Loss, RunningAverage, Average
-from ignite.handlers import EarlyStopping, ModelCheckpoint
+from ignite.metrics import Loss, RunningAverage, Average
+from ignite.handlers import ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.utils import convert_tensor
 
@@ -22,26 +19,22 @@ import models
 import utils.train_util as train_util
 from utils.build_vocab import Vocabulary
 from runners.base_runner import BaseRunner
-from datasets.SJTUDataSet import SJTUDataset, SJTUDatasetEval, collate_fn
 
 class Runner(BaseRunner):
 
     @staticmethod
     def _get_model(config, vocab_size):
         embed_size = config["model_args"]["embed_size"]
-        if config["encodermodel"] == "E2EASREncoder":
-            encodermodel = models.encoder.load_espnet_encoder(config["pretrained_encoder"])
-        else:
-            encodermodel = getattr(
-                models.encoder, config["encodermodel"])(
-                inputdim=config["inputdim"],
-                embed_size=embed_size,
-                **config["encodermodel_args"])
-            if "pretrained_encoder" in config:
-                encoder_state_dict = torch.load(
-                    config["pretrained_encoder"],
-                    map_location="cpu")
-                encodermodel.load_state_dict(encoder_state_dict, strict=False)
+        encodermodel = getattr(
+            models.encoder, config["encodermodel"])(
+            inputdim=config["inputdim"],
+            embed_size=embed_size,
+            **config["encodermodel_args"])
+        if "pretrained_encoder" in config:
+            encoder_state_dict = torch.load(
+                config["pretrained_encoder"],
+                map_location="cpu")
+            encodermodel.load_state_dict(encoder_state_dict, strict=False)
 
         decodermodel = getattr(
             models.decoder, config["decodermodel"])(
@@ -49,7 +42,7 @@ class Runner(BaseRunner):
             input_size=embed_size,
             **config["decodermodel_args"])
         model = getattr(
-            models.WordModel, config["model"])(encodermodel, decodermodel, **config["model_args"])
+            models.word_model, config["model"])(encodermodel, decodermodel, **config["model_args"])
         return model
 
     def _forward(self, model, batch, mode, **kwargs):
@@ -124,9 +117,9 @@ class Runner(BaseRunner):
 
         zh = config_parameters["zh"]
         vocabulary = torch.load(config_parameters["vocab_file"])
-        train_loader, val_loader, info = self._get_dataloaders(config_parameters, vocabulary)
+        train_loader, cv_loader, info = self._get_dataloaders(config_parameters, vocabulary)
         config_parameters["inputdim"] = info["inputdim"]
-        val_key2refs = info["val_key2refs"]
+        cv_key2refs = info["cv_key2refs"]
         logger.info("<== Estimating Scaler ({}) ==>".format(info["scaler"].__class__.__name__))
         logger.info(
             "Feature: {} Input dimension: {} Vocab Size: {}".format(
@@ -152,8 +145,7 @@ class Runner(BaseRunner):
             with torch.enable_grad():
                 optimizer.zero_grad()
                 output = self._forward(
-                    model, batch, "train",
-                    ss_ratio=config_parameters["scheduled_sampling_args"]["ss_ratio"]
+                    model, batch, "train"
                 )
                 loss = criterion(output["packed_logits"], output["targets"]).to(self.device)
                 loss.backward()
@@ -183,8 +175,7 @@ class Runner(BaseRunner):
                 return output
 
         metrics = {
-            "loss": Loss(criterion, output_transform=lambda x: (x["packed_logits"], x["targets"])),
-            "accuracy": Accuracy(output_transform=lambda x: (x["packed_logits"], x["targets"])),
+            "loss": Loss(criterion, output_transform=lambda x: (x["packed_logits"], x["targets"]))
         }
 
         evaluator = Engine(_inference)
@@ -196,19 +187,14 @@ class Runner(BaseRunner):
             key2pred.clear()
 
         evaluator.add_event_handler(
-            Events.EPOCH_COMPLETED, eval_cv, key2pred, val_key2refs)
+            Events.EPOCH_COMPLETED, eval_cv, key2pred, cv_key2refs)
 
         for name, metric in metrics.items():
-            metric.attach(trainer, name)
             metric.attach(evaluator, name)
 
         trainer.add_event_handler(
-              Events.EPOCH_COMPLETED, train_util.log_results, evaluator, val_loader,
-              logger.info, metrics.keys(), ["loss", "accuracy", "score"])
-
-        if config_parameters["scheduled_sampling"]:
-            trainer.add_event_handler(
-                Events.GET_BATCH_COMPLETED, train_util.update_ss_ratio, config_parameters, len(train_loader))
+              Events.EPOCH_COMPLETED, train_util.log_results, evaluator, cv_loader,
+              logger.info, ["loss", "score"])
 
         evaluator.add_event_handler(
             Events.EPOCH_COMPLETED, train_util.save_model_on_improved, crtrn_imprvd,
@@ -229,12 +215,6 @@ class Runner(BaseRunner):
                 "model": model,
             }
         )
-
-        # early_stop_handler = EarlyStopping(
-            # patience=config_parameters["early_stop"],
-            # score_function=lambda engine: engine.state.metrics["score"],
-            # trainer=trainer)
-        # evaluator.add_event_handler(Events.COMPLETED, early_stop_handler)
 
         trainer.run(train_loader, max_epochs=config_parameters["epochs"])
         return outputdir

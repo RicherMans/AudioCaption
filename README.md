@@ -1,42 +1,16 @@
 # AudioCaption : Listen and Tell
 
-This repository provides source code for several models on audio captioning as well as labels of several datasets.
+This repository provides source code for several models on audio captioning as well as several datasets.
 
 Firstly please checkout this repository.
 
 ```bash
-git clone https://www.github.com/Richermans/AudioCaption
+git clone --recurse-submodules https://www.github.com/Richermans/AudioCaption
 ```
 
 # Dataset
 
-For all datasets, labels are provided in the directory `data/*.json`.
-
-## AudioCaption
-
-### hospital
-
-The full AudioCaption hospital dataset (3710 video clips) can be downloaded via [google drive](https://drive.google.com/open?id=1_osRNYzRQf4siCHHKwudZQc6x0XPSAb9) .
-
-There is also a Zenodo link: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3715277.svg)](https://doi.org/10.5281/zenodo.3715277)
-
-The audio-only part of the dataset can be downloaded via [google drive](https://drive.google.com/file/d/1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC/view?usp=sharing).
-
-An easy way to download the dataset is by using the pip script `gdown`. `pip install gdown` will install that script. Then:
-
-```
-cd data
-gdown https://drive.google.com/uc?id=1tixUQAuGobL-O94D0Gwmxs94jeyMmPlC
-unzip hospital_audio.zip
-```
-
-If you need a proxy to download the dataset, we recommend using [Proxychains](https://github.com/rofl0r/proxychains-ng).
-
-### car
-
-The dataset on car scene can be downloaded via [google drive](https://drive.google.com/file/d/1D1h4_orPBVOlLX9rrnxYBtObD3tpp43B/view?usp=sharing).
-
-The source code for the proposed [sentence-level loss](http://arxiv.org/abs/1905.13448) is also provided here.
+The two datasets, hospital and car, can be downloaded via Zenodo: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4671263.svg)](https://doi.org/10.5281/zenodo.4671263). 
 
 # Related Papers
 Here are papers related to this repository:
@@ -61,7 +35,6 @@ If you'd like to use the AudioCaption dataset, please cite:
 }
 ```
 
-
 # Baseline
 
 In order to sucessfully run the baseline, the following packages and frameworks are required:
@@ -72,6 +45,8 @@ In order to sucessfully run the baseline, the following packages and frameworks 
 ## Prequisite Installation
 
 The code is written exclusively in Python3. In order to install all required packages use the included `requirements.txt`. `pip install -r requirements.txt` does the job.
+
+### Kaldi
 
 For this code, only the feature pipeline of kaldi is utlilized, thus only the feature packages need to be installed in order to function
 
@@ -107,11 +82,11 @@ It requires at least `java` being installed on your machine. It is recommended t
 
 ### (Optional) BERT Pretrained Embeddings
 
-You can load pretrained word embeddings in Google [BERT](https://github.com/google-research/bert#pre-trained-models) instead of training word embeddings from scratch. The scripts in `utils/bert` need a BERT server in the background. We use BERT server from [bert-as-service](https://github.com/hanxiao/bert-as-service).
+In [this paper](Audio Caption in a Car Setting with a Sentence-Level Loss), [BERT](https://github.com/google-research/bert#pre-trained-models) embeddings are used to provide sequence-level supervision. The scripts in `utils/bert` need [bert-as-service](https://github.com/hanxiao/bert-as-service) running in the background.
 
 To use bert-as-service, you need to first install the repository. It is recommended that you create a new environment with Tensorflow 1.3 to run BERT server since it is incompatible with Tensorflow 2.x.
 
-After successful installation of [bert-as-service](https://github.com/hanxiao/bert-as-service), downloading and running the BERT server needs to execute:
+After successful installation of [bert-as-service](https://github.com/hanxiao/bert-as-service), downloading and running the BERT server: 
 
 ```bash
 bash scripts/prepare_bert_server.sh <path-to-server> <num-workers> zh
@@ -119,8 +94,7 @@ bash scripts/prepare_bert_server.sh <path-to-server> <num-workers> zh
 
 By default, server based on BERT base Chinese model is running in the background. You can change to other models by changing corresponding model name and path in `scripts/prepare_bert_server.sh`.
 
-To extract BERT word embeddings, you need to execute `utils/bert/create_word_embedding.py`, where the usage is shown.
-
+To extract sentence embeddings, you need to execute `utils/bert/create_sent_embedding.py`, where the usage is shown.
 
 ## Extract Features
 
@@ -146,7 +120,7 @@ rm $FEATURE_DIR/fbank.ark
 * Logmelspectrogram:
 
 ```bash
-python utils/featextract.py -prefix $PREFIX `cat $FEATURE_DIR/wav.scp | awk '{print $2}'` $FEATURE_DIR/logmel.hdf5 $FEATURE_DIR/logmel.scp mfcc -win_length 1764 -hop_length 882
+python utils/extract_feat.py $FEATURE_DIR/wav.scp $FEATURE_DIR/logmel.hdf5 $FEATURE_DIR/logmel.scp mfcc -win_length 1764 -hop_length 882
 ```
 
 The kaldi scp file can be further split into a development scp and an evaluation scp:
@@ -154,6 +128,14 @@ The kaldi scp file can be further split into a development scp and an evaluation
 python utils/split_scp.py $FEATURE_DIR/fbank.scp $FEATURE_DIR/zh_eval.json
 python utils/split_scp.py $FEATURE_DIR/logmel.scp $FEATURE_DIR/zh_eval.json
 ```
+
+## Dump vocabulary
+
+Vocabulary should be prepared and dumped to a file for later use. To use the tokenized hospital dataset, run:
+```bash
+python utils/build_vocab.py "['data/hospital/zh_dev.json', 'data/hospital/zh_eval.json']" data/hospital/vocab_zh.pth --pretokenized True
+```
+A vocabulary file `data/hospital/vocab_zh.pth` will be generated.
 
 ## Training Configurator
 
@@ -174,15 +156,19 @@ This will store the training logs and model checkpoints in `OUTPUTPATH/MODEL/TIM
 
 ## Predicting and Evaluating
 
-Predicting and evaluating is done by running `evaluate`:
+Predicting and evaluating is done by running `evaluate` (e.g. using Logmelspectrogram feature):
 
 ```bash
-export kaldi_stream="copy-feats scp:$FEATURE_DIR/fbank_eval.scp ark:- |"
 export experiment_path=experiments/***
-python runners/run.py evaluate $experiment_path "$kaldi_stream" $FEATURE_DIR/zh_eval.json
+python runners/run.py predict_evaluate $experiment_path $FEATURE_DIR/logmel.hdf5 $FEATURE_DIR/logmel_eval.scp $FEATURE_DIR/zh_eval.json
 ```
 
 Standard machine translation metrics (BLEU@1-4, ROUGE-L, CIDEr, METEOR and SPICE) are included, where METEOR and SPICE can only be used on English datasets.
+
+If you just want to do inference, do not provide caption reference file:
+```bash
+python runners/run.py predict_evaluate $experiment_path $FEATURE_DIR/logmel.hdf5 $FEATURE_DIR/logmel_eval.scp
+```
 
 
 

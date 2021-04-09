@@ -3,11 +3,12 @@
 # @Date:   2018-03-29
 # @Last Modified by:   richman
 # @Last Modified time: 2018-03-29
-import os
 import sys
+import os
 import librosa
 import numpy as np
 import argparse
+import h5py
 from tqdm import tqdm as tqdm
 
 sys.path.append(os.getcwd())
@@ -84,10 +85,9 @@ def extractraw(y, fs, **params):
 parser = argparse.ArgumentParser()
 """ Arguments: wavfilelist, n_mfcc, n_fft, win_length, hop_length, htk, fmin, fmax """
 parser.add_argument('-config', type=argparse.FileType('r'), default=None)
-parser.add_argument('-prefix', type=str, default='')
-parser.add_argument('wavfilelist', type=str, default=sys.stdin, nargs="+")
-parser.add_argument('out', type=argparse.FileType('wb'),
-                    default=sys.stdout.buffer)
+parser.add_argument('wavfilelist', type=str, default=sys.stdin)
+parser.add_argument('featureout', type=str, default=sys.stdout)
+parser.add_argument('keyout', type=str, default=sys.stdout)
 
 parser.add_argument('-norm', default='mean')
 # parser.add_argument('-concat', default=1, type=int,
@@ -128,16 +128,18 @@ args = parser.parse_args()
 argsdict = vars(args)
 
 # Just for TQDM, usually its not that large anyway
-for line in tqdm(args.wavfilelist, ascii=True):
-    assert os.path.exists(line) and not line.endswith('scp'), "Passed only .scp file, you need to cat it e.g. python featextract.py `cat FILE`"
-    y, sr = librosa.load(line, sr=None, mono=not args.nomono)
-    # Stereo
-    if y.ndim > 1:
-        feat = np.array([args.extractfeat(i, sr, **argsdict) for i in y])
-    else:
-        feat = args.extractfeat(y, sr, **argsdict)
-    # Transpose feat, nsamples to nsamples, feat
-    feat = np.vstack(feat).transpose()
-    filename = os.path.splitext(os.path.basename(line.strip()))[0]
-    key = args.prefix + "_" + filename if args.prefix != '' else filename
-    kaldi_io.write_mat(args.out, feat, key=key)
+# for line in tqdm(args.wavfilelist, ascii=True):
+with h5py.File(args.featureout, "w") as feature_store, open(args.keyout, "w") as key_store, open(args.wavfilelist, "r") as wav_reader:
+    for line in tqdm(wav_reader.readlines(), ascii=True, ncols=100):
+        key, filename = line.strip().split()
+        assert os.path.exists(filename), filename + "not exists!"
+        y, sr = librosa.load(filename, sr=None, mono=not args.nomono)
+        # Stereo
+        if y.ndim > 1:
+            feat = np.array([args.extractfeat(i, sr, **argsdict) for i in y])
+        else:
+            feat = args.extractfeat(y, sr, **argsdict)
+        # Transpose feat, nsamples to nsamples, feat
+        feat = np.vstack(feat).transpose()
+        feature_store[key] = feat
+        key_store.write(key + "\n")

@@ -112,16 +112,7 @@ runs/*
 experiments*/*
 
 # Data files
-data/*/*.scp
-data/*/*.ark
-data/*/*.hdf5
-data/*/vocab*
-data/*/*score*
-data/*.scp
-data/*.ark
-data/*.hdf5
-data/*vocab*
-data/*score*
+data
 
 # Chinese tokenizer and BERT server
 utils/dataserver/*

@@ -38,7 +38,7 @@ class BaseRunner(object):
         for batch in tqdm(
             torch.utils.data.DataLoader(
                 SJTUDataset(
-                    kaldi_stream=config["feature_stream"],
+                    feature_file=config["feature_file"],
                     caption_df=caption_df,
                     vocabulary=vocabulary,
                 ),
@@ -64,7 +64,7 @@ class BaseRunner(object):
 
         trainloader = torch.utils.data.DataLoader(
             SJTUDataset(
-                kaldi_stream=config["feature_stream"],
+                feature_file=config["feature_file"],
                 caption_df=train_df,
                 vocabulary=vocabulary,
                 transform=[scaler.transform, augments]
@@ -82,10 +82,10 @@ class BaseRunner(object):
             cv_key2refs = cv_df.groupby("key")["caption"].apply(list).to_dict()
         cvloader = torch.utils.data.DataLoader(
             SJTUDataset(
-                kaldi_stream=config["feature_stream"],
+                feature_file=config["feature_file"],
                 caption_df=cv_df,
                 vocabulary=vocabulary,
-                transform=scaler.transform
+                transform=[scaler.transform]
             ),
             shuffle=False,
             collate_fn=collate_fn([0, 1]),
@@ -182,29 +182,33 @@ class BaseRunner(object):
         writer.write("Unique sentence number: {}\n".format(len(set(sentences))))
         writer.close()
 
-    def evaluate(self,
-                 experiment_path: str,
-                 kaldi_stream: str,
-                 caption_file: str,
-                 caption_output: str = "eval_output.json",
-                 score_output: str = "scores.txt",
-                 **kwargs):
+    def predict_evaluate(self,
+                         experiment_path: str,
+                         feature_file: str,
+                         eval_scp: str,
+                         caption_file: str = None,
+                         caption_output: str = "eval_output.json",
+                         score_output: str = "scores.txt",
+                         **kwargs):
         """kwargs: {'max_length': int, 'method': str, 'beam_size': int}"""
 
         dump = torch.load(os.path.join(experiment_path, "saved.pth"),
                           map_location="cpu")
-        model = dump["model"]
         # Some scaler (sklearn standardscaler)
         scaler = dump["scaler"]
         # Also load previous training config
         config = dump["config"]
         vocabulary = torch.load(config["vocab_file"])
         zh = config["zh"]
+
+        model = self._get_model(config, len(vocabulary))
+        model.load_state_dict(dump["model"])
         model = model.to(self.device)
 
         dataset = SJTUDatasetEval(
-            kaldi_stream=kaldi_stream,
-            transform=scaler.transform)
+            feature=feature_file,
+            eval_scp=eval_scp,
+            transform=[scaler.transform])
         dataloader = torch.utils.data.DataLoader(
             dataset,
             shuffle=False,
@@ -212,11 +216,12 @@ class BaseRunner(object):
             batch_size=32,
             num_workers=0)
 
-        caption_df = pd.read_json(caption_file, dtype={"key": str})
-        if zh:
-            key2refs = caption_df.groupby("key")["tokens"].apply(list).to_dict()
-        else:
-            key2refs = caption_df.groupby("key")["caption"].apply(list).to_dict()
+        if caption_file:
+            caption_df = pd.read_json(caption_file, dtype={"key": str})
+            if zh:
+                key2refs = caption_df.groupby("key")["tokens"].apply(list).to_dict()
+            else:
+                key2refs = caption_df.groupby("key")["caption"].apply(list).to_dict()
 
         model.eval()
 
@@ -226,7 +231,7 @@ class BaseRunner(object):
             with torch.no_grad():
                 model.eval()
                 keys = batch[0]
-                output = self._forward(model, batch, mode="sample", **kwargs)
+                output = self._forward(model, batch, mode="eval", **kwargs)
                 seqs = output["seqs"].cpu().numpy()
 
                 for idx, seq in enumerate(seqs):
@@ -247,6 +252,9 @@ class BaseRunner(object):
             })
         pred_df = pd.DataFrame(pred_df)
         pred_df.to_json(os.path.join(experiment_path, caption_output))
+
+        if not caption_file:
+            return
 
         from pycocoevalcap.bleu.bleu import Bleu
         from pycocoevalcap.rouge.rouge import Rouge
@@ -281,53 +289,6 @@ class BaseRunner(object):
 
         f.close()
 
-    def dcase_predict(self,
-                      experiment_path: str,
-                      kaldi_stream,
-                      output: str="predition.csv",
-                      **kwargs):
-        """kwargs: {'max_length': int, 'method': str, 'beam_size': int}"""
-
-        dump = torch.load(os.path.join(experiment_path, "saved.pth"),
-                          map_location="cpu")
-        model = dump["model"]
-        # Some scaler (sklearn standardscaler)
-        scaler = dump["scaler"]
-        # Also load previous training config
-        config = dump["config"]
-        vocabulary = torch.load(config["vocab_file"])
-        zh = config["zh"]
-        model = model.to(self.device)
-        dataset = SJTUDatasetEval(
-            kaldi_stream=kaldi_stream,
-            transform=scaler.transform)
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            shuffle=False,
-            collate_fn=collate_fn((1,)),
-            batch_size=32,
-            num_workers=0)
-
-        pbar = ProgressBar(persist=False, ascii=True)
-        predictions = []
-
-        def _sample(engine, batch):
-            # batch: [keys, feats, feat_lens]
-            with torch.no_grad():
-                model.eval()
-                keys = batch[0]
-                output = self._forward(model, batch, None, mode="sample", **kwargs)
-                seqs = output["seqs"].cpu().numpy()
-                for idx, seq in enumerate(seqs):
-                    caption = self._convert_idx2sentence(seq, vocabulary, zh=zh)
-                    predictions.append({"file_name": keys[idx] + ".wav", "caption_predicted": caption})
-
-        sample_engine = Engine(_sample)
-        pbar.attach(sample_engine)
-        sample_engine.run(dataloader)
-
-        pred_df = pd.DataFrame(predictions)
-        pred_df.to_csv(os.path.join(experiment_path, output), index=False)
 
 if __name__ == "__main__":
     fire.Fire(BaseRunner)

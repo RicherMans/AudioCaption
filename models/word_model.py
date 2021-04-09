@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import random
-
-import numpy as np
 import torch
 import torch.nn as nn
 
-import utils.score_util as score_util
 
 class CaptionModel(nn.Module):
     """
@@ -83,7 +79,6 @@ class CaptionModel(nn.Module):
         method = kwargs.get("method", "greedy")
         temp = kwargs.get("temperature", 1.0)
         max_length = kwargs.get("max_length", self.max_length)
-        ss_ratio = kwargs.get("ss_ratio", 1.0)
 
         if cap_lens is not None:
             max_length = max(cap_lens)
@@ -137,9 +132,8 @@ class CaptionModel(nn.Module):
                 if unfinished.sum() == 0:
                     break
             else:
-                # training, scheduled sampling
-                if random.random() < ss_ratio:
-                    w_t = caps[:, t]
+                # training
+                w_t = caps[:, t]
 
         output = {
             "seqs": seqs, 
@@ -226,7 +220,7 @@ class CaptionModel(nn.Module):
                 top_k_logprobs, top_k_words = logprobs_t.view(-1).topk(k, 0, True, True)
 
             # convert unrolled indices to actual indices of scores
-            prev_word_inds = top_k_words / self.vocab_size  # [k,]
+            prev_word_inds = top_k_words // self.vocab_size  # [k,]
             next_word_inds = top_k_words % self.vocab_size  # [k,]
 
             # add new words to sequences
@@ -330,92 +324,4 @@ class CaptionSentenceModel(CaptionModel):
         output = {"seqs": seqs, "logits": logits, "seq_outputs": seq_outputs,
                   "sampled_logprobs": sampled_logprobs}
         return output
-
-
-class SentenceDecoderModel(CaptionModel):
-
-    def __init__(self, encoder, decoder, **kwargs):
-        super(SentenceDecoderModel, self).__init__(encoder, decoder, **kwargs)
-
-    def forward(self, *input, **kwargs):
-        if len(input) != 3 and len(input) != 1:
-            raise Exception("number of input should be either 3 (sent_embeds, caps, cap_lens) or 1 (sent_embeds)!")
-
-        mode = kwargs.get("mode", "forward")
-        assert mode in ("forward", "sample"), "unknown running mode"
-        # "forward" means teacher forcing training, "sample" means sampling
-
-        if len(input) == 1 and mode == "forward":
-            raise Exception("missing caption labels for training!")
-
-        return getattr(self, "_" + mode)(*input, **kwargs)
-
-    def _forward(self, *input, **kwargs):
-        """Decode sentence embeddings and generates captions.
-           With sentence embeddings and captions as input, i.e., teacher forcing
-        """
-        sent_embeds, caps, cap_lens = input
-
-        # prepare input to the decoder: encoder output + label embeddings
-        embeds = self.word_embeddings(caps)
-        embeds = self.dropoutlayer(embeds)
-        # embeds: [N, max_len, emb_dim]
-        embeds = torch.cat((sent_embeds.unsqueeze(1), embeds), 1)
-        # embeds: [N, max_len + 1, emb_dim]
-
-        # prepare packed input to the decoder for efficient training (remove padded zeros)
-        # audio feature and the first (max_len - 1) word embeddings are packed
-        packed = nn.utils.rnn.pack_padded_sequence(
-            embeds, cap_lens, batch_first=True)
-        output = self.decoder(packed, None)
-
-        return output
-
-    def _sample(self, *input, **kwargs):
-        if len(input) == 3:
-            sent_embeds, _, _ = input
-        else:
-            sent_embeds, = input
-
-        # sent_embeds: [N, emb_dim]
-        output = self.sample_core(sent_embeds, None, **kwargs)
-
-        return output
-
-
-# class CaptionInstanceModel(CaptionModel):
-
-    # def __init__(self, encoder, decoder, num_instance, instance_embed_size, **kwargs):
-        # super(CaptionInstanceModel, self).__init__(encoder, decoder, **kwargs)
-        # self.word_embeddings = nn.Embedding(self.vocab_size, self.decoder.model.input_size)
-        # nn.init.kaiming_uniform_(self.word_embeddings.weight)
-        # self.instance_embedding = nn.Embedding(num_instance, instance_embed_size)
-        # nn.init.kaiming_uniform_(self.instance_embedding.weight)
-
-    # def forward(self, *input, **kwargs):
-        # if len(input) != 5 and len(input) != 3:
-            # raise Exception("number of input should be either 5 (feats, feat_lens, caps, cap_lens, cap_idxs) or 3 (feats, feat_lens, instance_labels)!")
-
-        # if len(input) == 5:
-            # train_mode = kwargs.get("train_mode", "tf")
-            # assert train_mode in ("tf", "sample"), "unknown training mode"
-            # kwargs["train_mode"] = train_mode
-            # # "tf": teacher forcing training, "sample": no teacher forcing training
-            # feats, feat_lens, caps, cap_lens, cap_idxs = input
-            # instance_embeds = self.instance_embedding(cap_idxs)
-        # else:
-            # feats, feat_lens, instance_labels = input
-            # instance_embeds = torch.matmul(instance_labels, self.instance_embedding.weight)
-            # caps = None
-            # cap_lens = None
-
-        # encoded = self.encoder(feats, feat_lens)
-        # # encoded: {
-        # #     audio_embeds: [N, emb_dim]
-        # #     audio_embeds_time: [N, src_max_len, emb_dim]
-        # #     state: rnn style hidden states, [num_dire * num_layers, N, hs_enc]
-        # #     audio_embeds_lens: [N, ]
-        # encoded["audio_embeds"] = torch.cat((encoded["audio_embeds"], instance_embeds), dim=-1)
-        # output = self.sample(encoded, caps, cap_lens, **kwargs)
-        # return output
 
