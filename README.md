@@ -82,7 +82,7 @@ It requires at least `java` being installed on your machine. It is recommended t
 
 ### (Optional) BERT Pretrained Embeddings
 
-In [this paper](Audio Caption in a Car Setting with a Sentence-Level Loss), [BERT](https://github.com/google-research/bert#pre-trained-models) embeddings are used to provide sequence-level supervision. The scripts in `utils/bert` need [bert-as-service](https://github.com/hanxiao/bert-as-service) running in the background.
+In [this paper](http://arxiv.org/abs/1905.13448), [BERT](https://github.com/google-research/bert#pre-trained-models) embeddings are used to provide sequence-level supervision. The scripts in `utils/bert` need [bert-as-service](https://github.com/hanxiao/bert-as-service) running in the background.
 
 To use bert-as-service, you need to first install the repository. It is recommended that you create a new environment with Tensorflow 1.3 to run BERT server since it is incompatible with Tensorflow 2.x.
 
@@ -100,7 +100,7 @@ To extract sentence embeddings, you need to execute `utils/bert/create_sent_embe
 
 The kaldi scp format requires a tab or space separated line with the information: `FEATURENAME WAVEPATH`
 
-For example, to extract feature from hospital data, assume the raw data is placed in `DATA_DIR` (`data/hospital/wav` here) and you will store features in `FEATURE_DIR` (`data/hospital` here):
+For example, to extract feature from hospital data, assume the raw data is placed in `DATA_DIR` (`data/hospital/wav` here) and you will store features in `FEATURE_DIR` (`data/hospital` here). The annotation files (`zh_dev.json` and `zh_eval.json`) are also placed in `FEATURE_DIR`.
 
 ```bash
 DATA_DIR=`pwd`/data/hospital/wav
@@ -131,7 +131,7 @@ python utils/split_scp.py $FEATURE_DIR/logmel.scp $FEATURE_DIR/zh_eval.json
 
 ## Dump vocabulary
 
-Vocabulary should be prepared and dumped to a file for later use. To use the tokenized hospital dataset, run:
+Vocabulary should be prepared and dumped to a file for later use. You can run the following command to use the tokenized hospital dataset:
 ```bash
 python utils/build_vocab.py "['data/hospital/zh_dev.json', 'data/hospital/zh_eval.json']" data/hospital/vocab_zh.pth --pretokenized True
 ```

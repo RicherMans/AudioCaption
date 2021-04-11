@@ -16,16 +16,16 @@ class EmbeddingExtractor(object):
         lang = "zh" if zh else "en"
         model = SentenceTransformer(lang2model[lang])
 
-        self.extract(caption_file, model, output, dev)
+        self._extract(caption_file, model, output, dev)
 
     def extract_originbert(self, caption_file: str, output: str, dev: bool=True, ip="localhost"):
         from bert_serving.client import BertClient
         caption_df = pd.read_json(caption_file, dtype={"key": str})
         client = BertClient(ip)
         
-        self.extract(caption_file, client, output, dev)
+        self._extract(caption_file, client, output, dev)
 
-    def extract(self, caption_file: str, model, output, dev: bool):
+    def _extract(self, caption_file: str, model, output, dev: bool):
         caption_df = pd.read_json(caption_file, dtype={"key": str})
         embeddings = {}
 

@@ -28,22 +28,22 @@ decodermodel: RNNDecoder
 decodermodel_args:
     num_layers: 1
     hidden_size: 512
-model: CaptionModel
+model: CaptionSentenceModel
 model_args:
     embed_size: 256
     dropout: 0.3
+    seq_output_size: 768
 #pretrained_word_embedding: data/hospital/embeddings/bert_word_zh.npy
+sentence_embedding: data/hospital/embeddings/originbert_dev.pkl
+seq_loss_ratio: 10
 
 improvecriterion: score # Can be acc | loss | score
-teacher_forcing_ratio: 1.0
-teacher_forcing_on_validation: False
 
 optimizer: Adam
 optimizer_args:
     lr: 0.0005
     weight_decay: 0.0
 epochs: 25
-early_stop: 5
 scheduler: ReduceLROnPlateau
 scheduler_args:
     mode: min

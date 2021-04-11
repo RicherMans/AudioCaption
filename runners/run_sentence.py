@@ -5,9 +5,6 @@ import sys
 import datetime
 import random
 import uuid
-import re
-from pprint import pformat
-from contextlib import contextmanager
 
 from tqdm import tqdm
 import fire
@@ -16,8 +13,8 @@ import pandas as pd
 import sklearn.preprocessing as pre
 import torch
 from ignite.engine.engine import Engine, Events
-from ignite.metrics import Accuracy, Loss, RunningAverage, Average
-from ignite.handlers import EarlyStopping, ModelCheckpoint
+from ignite.metrics import RunningAverage, Average
+from ignite.handlers import ModelCheckpoint
 from ignite.contrib.handlers import ProgressBar
 from ignite.utils import convert_tensor
 
@@ -26,10 +23,9 @@ import models
 import utils.train_util as train_util
 from utils.build_vocab import Vocabulary
 from datasets.SJTUDataSet import SJTUSentenceDataset, collate_fn
-import utils.score_util as score_util
-from runners.base_runner import BaseRunner
+from runners.run import Runner as XeRunner
 
-class Runner(BaseRunner):
+class Runner(XeRunner):
 
     @staticmethod
     def _get_dataloaders(config, vocabulary):
@@ -44,7 +40,7 @@ class Runner(BaseRunner):
         for batch in tqdm(
             torch.utils.data.DataLoader(
                 SJTUSentenceDataset(
-                    kaldi_stream=config["feature_stream"],
+                    feature_file=config["feature_file"],
                     caption_df=caption_df,
                     vocabulary=vocabulary,
                     sentence_embedding=sentence_embedding,
@@ -72,7 +68,7 @@ class Runner(BaseRunner):
                                      # random_state=0)
         trainloader = torch.utils.data.DataLoader(
             SJTUSentenceDataset(
-                kaldi_stream=config["feature_stream"],
+                feature_file=config["feature_file"],
                 caption_df=train_df,
                 vocabulary=vocabulary,
                 sentence_embedding=sentence_embedding,
@@ -90,11 +86,11 @@ class Runner(BaseRunner):
             cv_key2refs = cv_df.groupby("key")["caption"].apply(list).to_dict()
         cvloader = torch.utils.data.DataLoader(
             SJTUSentenceDataset(
-                kaldi_stream=config["feature_stream"],
+                feature_file=config["feature_file"],
                 caption_df=cv_df,
                 vocabulary=vocabulary,
                 sentence_embedding=sentence_embedding,
-                transform=scaler.transform,
+                transform=[scaler.transform],
             ),
             shuffle=False,
             collate_fn=collate_fn([0, 1]),
@@ -102,44 +98,20 @@ class Runner(BaseRunner):
         )
         return trainloader, cvloader, {"scaler": scaler, "inputdim": inputdim, "cv_key2refs": cv_key2refs}
 
-    @staticmethod
-    def _get_model(config, vocab_size):
-        embed_size = config["model_args"]["embed_size"]
-        encodermodel = getattr(
-            models.encoder, config["encodermodel"])(
-            inputdim=config["inputdim"], 
-            embed_size=embed_size,
-            **config["encodermodel_args"])
-        if "pretrained_encoder" in config:
-            encoder_state_dict = torch.load(
-                config["pretrained_encoder"],
-                map_location="cpu")
-            encodermodel.load_state_dict(encoder_state_dict)
-
-        decodermodel = getattr(
-            models.decoder, config["decodermodel"])(
-            vocab_size=vocab_size,
-            embed_size=embed_size,
-            **config["decodermodel_args"])
-        model = getattr(
-            models.WordModel, config["model"])(encodermodel, decodermodel, **config["model_args"])
-        return model
-
     def _forward(self, model, batch, mode="train", **kwargs):
-        assert mode in ("train", "sample")
+        assert mode in ("train", "validation", "eval")
 
-        if mode == "sample":
+        if mode == "eval":
             feats = batch[1]
             feat_lens = batch[-1]
 
             feats = convert_tensor(feats.float(),
                                    device=self.device,
                                    non_blocking=True)
-            sampled = model(feats, feat_lens, mode="sample", **kwargs)
+            sampled = model(feats, feat_lens, **kwargs)
             return sampled
 
         # mode is "train"
-        assert "tf" in kwargs, "need to know whether to use teacher forcing"
 
         feats = batch[0]
         caps = batch[1]
@@ -159,15 +131,11 @@ class Runner(BaseRunner):
         targets = torch.nn.utils.rnn.pack_padded_sequence(
             caps, cap_lens, batch_first=True).data
 
-        if kwargs["tf"]:
-            output = model(feats, feat_lens, caps, cap_lens, mode="forward")
-            # keys include: ["probs", "seq_outputs"]
-        else:
-            output = model(feats, feat_lens, mode="sample", max_length=max(cap_lens))
-            probs = torch.nn.utils.rnn.pack_padded_sequence(
-                output["probs"], cap_lens, batch_first=True).data
-            probs = convert_tensor(probs, device=self.device, non_blocking=True)
-            output["probs"] = probs
+        output = model(feats, feat_lens, caps, cap_lens)
+        packed_logits = torch.nn.utils.rnn.pack_padded_sequence(
+            output["logits"], cap_lens, batch_first=True).data
+        packed_logits = convert_tensor(packed_logits, device=self.device, non_blocking=True)
+        output["packed_logits"] = packed_logits
 
         output["sentence_targets"] = sent_embeds
         output["word_targets"] = targets
@@ -213,7 +181,7 @@ class Runner(BaseRunner):
         logger.info("<== Estimating Scaler ({}) ==>".format(info["scaler"].__class__.__name__))
         logger.info(
             "Stream: {} Input dimension: {} Vocab Size: {}".format(
-                config_parameters["feature_stream"], info["inputdim"], len(vocabulary)))
+                config_parameters["feature_file"], info["inputdim"], len(vocabulary)))
 
         model = self._get_model(config_parameters, len(vocabulary))
         if "pretrained_word_embedding" in config_parameters:
@@ -226,25 +194,22 @@ class Runner(BaseRunner):
         )(model.parameters(), **config_parameters["optimizer_args"])
         train_util.pprint_dict(optimizer, logger.info, formatter="pretty")
 
-
-        XE_criterion = torch.nn.CrossEntropyLoss().to(self.device)
+        xe_criterion = torch.nn.CrossEntropyLoss().to(self.device)
         seq_criterion = torch.nn.CosineEmbeddingLoss().to(self.device)
         crtrn_imprvd = train_util.criterion_improver(config_parameters['improvecriterion'])
-        tf_ratio = config_parameters["teacher_forcing_ratio"]
 
         def _train_batch(engine, batch):
             model.train()
-            tf = True if random.random() < tf_ratio else False
             with torch.enable_grad():
                 optimizer.zero_grad()
-                output = self._forward(model, batch, tf=tf)
-                XE_loss = XE_criterion(output["probs"], output["word_targets"])
+                output = self._forward(model, batch, "train")
+                xe_loss = xe_criterion(output["packed_logits"], output["word_targets"])
                 seq_loss = seq_criterion(output["seq_outputs"], output["sentence_targets"], torch.ones(batch[0].shape[0]).to(self.device))
-                loss = XE_loss + seq_loss * config_parameters["seq_loss_ratio"]
+                loss = xe_loss + seq_loss * config_parameters["seq_loss_ratio"]
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
                 optimizer.step()
-                output["XE_loss"] = XE_loss.item()
+                output["xe_loss"] = xe_loss.item()
                 output["seq_loss"] = seq_loss.item()
                 output["loss"] = loss.item()
                 return output
@@ -260,10 +225,10 @@ class Runner(BaseRunner):
             model.eval()
             keys = batch[3]
             with torch.no_grad():
-                output = self._forward(model, batch, tf=config_parameters["teacher_forcing_on_validation"])
-                output["XE_loss"] = XE_criterion(output["probs"], output["word_targets"])
+                output = self._forward(model, batch, "validation")
+                output["xe_loss"] = xe_criterion(output["packed_logits"], output["word_targets"])
                 output["seq_loss"] = seq_criterion(output["seq_outputs"], output["sentence_targets"], torch.ones(len(keys)).to(self.device))
-                output["loss"] = output["XE_loss"] + output["seq_loss"] * config_parameters["seq_loss_ratio"]
+                output["loss"] = output["xe_loss"] + output["seq_loss"] * config_parameters["seq_loss_ratio"]
                 seqs = output["seqs"].cpu().numpy()
                 for (idx, seq) in enumerate(seqs):
                     if keys[idx] in key2pred:
@@ -274,14 +239,13 @@ class Runner(BaseRunner):
 
         metrics = {
             "loss": Average(output_transform=lambda x: x["loss"]),
-            "XE_loss": Average(output_transform=lambda x: x["XE_loss"]),
+            "xe_loss": Average(output_transform=lambda x: x["xe_loss"]),
             "seq_loss": Average(output_transform=lambda x: x["seq_loss"]),
         }
 
         evaluator = Engine(_inference)
 
         for name, metric in metrics.items():
-            metric.attach(trainer, name)
             metric.attach(evaluator, name)
 
         def eval_cv(engine, key2pred, key2refs):
@@ -295,12 +259,12 @@ class Runner(BaseRunner):
             
         trainer.add_event_handler(
               Events.EPOCH_COMPLETED, train_util.log_results, evaluator, cvloader,
-              logger.info, metrics.keys(), ["XE_loss", "seq_loss", "score"])
+              logger.info, list(metrics.keys()) + ["score"])
 
         evaluator.add_event_handler(
             Events.EPOCH_COMPLETED, train_util.save_model_on_improved, crtrn_imprvd,
             "score", {
-                "model": model,
+                "model": model.state_dict(),
                 "config": config_parameters,
                 "scaler": info["scaler"]
         }, os.path.join(outputdir, "saved.pth"))
@@ -311,18 +275,17 @@ class Runner(BaseRunner):
             }
         )
 
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            # optimizer, **config_parameters["scheduler_args"])
+        scheduler = getattr(torch.optim.lr_scheduler, config_parameters["scheduler"])(
+            optimizer, **config_parameters["scheduler_args"])
+        evaluator.add_event_handler(
+            Events.EPOCH_COMPLETED, train_util.update_lr,
+            scheduler, "score")
 
-        # evaluator.add_event_handler(
-            # Events.EPOCH_COMPLETED, train_util.update_reduce_on_plateau,
-            # scheduler, "score")
-
-        # early_stop_handler = EarlyStopping(
-            # patience=config_parameters["early_stop"],
-            # score_function=lambda engine: engine.state.metrics["score"],
-            # trainer=trainer)
-        # evaluator.add_event_handler(Events.COMPLETED, early_stop_handler)
+        evaluator.add_event_handler(
+            Events.EPOCH_COMPLETED, checkpoint_handler, {
+                "model": model,
+            }
+        )
 
         trainer.run(trainloader, max_epochs=config_parameters["epochs"])
         return outputdir

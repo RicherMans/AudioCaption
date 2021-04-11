@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import pdb
 import torch
 import torch.nn as nn
 
@@ -250,6 +251,7 @@ class CaptionSentenceModel(CaptionModel):
         max_length = kwargs.get("max_length", self.max_length)
         if cap_lens is not None:
             max_length = max(cap_lens)
+            cap_lens = torch.as_tensor(cap_lens)
         assert method in ("greedy", "sample", "beam"), "unknown sampling method"
 
         if method == "beam":
@@ -260,7 +262,7 @@ class CaptionSentenceModel(CaptionModel):
         audio_embeds = encoded["audio_embeds"]
         h_t = encoded["state"]
 
-        N = encoded.size(0)
+        N = audio_embeds.size(0)
         lens = torch.zeros(N)
         seqs = torch.zeros(N, max_length, dtype=torch.long).fill_(self.end_idx)
         logits = torch.zeros(N, max_length, self.vocab_size)
@@ -286,7 +288,7 @@ class CaptionSentenceModel(CaptionModel):
             # "hidden": [N, 1, hidden_size]
             logits_t = output_t["logits"].squeeze(1)
             logits[:, t, :] = logits_t
-            hiddens[:, t, :] = output_t["hidden"].squeeze(1)
+            hiddens[:, t, :] = output_t["states"].squeeze(1)
 
             # sample the next input word and get the corresponding logits
             sampled = self.sample_next_word(logits_t, method, temp)
@@ -308,18 +310,19 @@ class CaptionSentenceModel(CaptionModel):
             if caps is not None:
                 w_t = caps[:, t]
             
-            # obtain sentence outputs
-            idxs = torch.arange(max_length, device="cpu").repeat(N).view(N, max_length)
-            if cap_lens is not None:
-                mask = (idxs < cap_lens.view(-1, 1)).to(encoded.device)
-            else:
-                mask = (idxs < lens.view(-1, 1)).to(encoded.device)
-            # mask: [N, T]
-            seq_outputs = hiddens * mask.unsqueeze(-1)
-            seq_outputs = seq_outputs.sum(1)
-            seq_outputs = seq_outputs / lens.unsqueeze(1).to(encoded.device)
-            # seq_outputs: [N, E]
-            seq_outputs = self.output_transform(seq_outputs)
+        # obtain sentence outputs
+        idxs = torch.arange(max_length, device="cpu").repeat(N).view(N, max_length)
+        # import pdb; pdb.set_trace()
+        if cap_lens is not None:
+            mask = (idxs < cap_lens.view(-1, 1)).to(audio_embeds.device)
+        else:
+            mask = (idxs < lens.view(-1, 1)).to(audio_embeds.device)
+        # mask: [N, T]
+        seq_outputs = hiddens * mask.unsqueeze(-1)
+        seq_outputs = seq_outputs.sum(1)
+        seq_outputs = seq_outputs / lens.unsqueeze(1).to(audio_embeds.device)
+        # seq_outputs: [N, E]
+        seq_outputs = self.output_transform(seq_outputs)
 
         output = {"seqs": seqs, "logits": logits, "seq_outputs": seq_outputs,
                   "sampled_logprobs": sampled_logprobs}

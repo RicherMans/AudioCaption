@@ -54,9 +54,9 @@ class SJTUDataset(torch.utils.data.Dataset):
 
 class SJTUSentenceDataset(SJTUDataset):
 
-    def __init__(self, kaldi_stream, caption_df, vocabulary,
+    def __init__(self, feature_file, caption_df, vocabulary,
                  sentence_embedding, transform=None):
-        super(SJTUSentenceDataset, self).__init__(kaldi_stream,
+        super(SJTUSentenceDataset, self).__init__(feature_file,
             caption_df, vocabulary, transform)
         self.sentence_embedding = sentence_embedding
 

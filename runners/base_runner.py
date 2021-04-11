@@ -120,68 +120,6 @@ class BaseRunner(object):
     def train(self, config, **kwargs):
         raise NotImplementedError
 
-    def sample(self,
-               experiment_path: str,
-               kaldi_stream,
-               output: str="output_word.txt",
-               **kwargs):
-        """Generate captions given experiment model"""
-        """kwargs: {'max_length': int, 'method': str, 'beam_size': int}"""
-        import tableprint as tp
-
-        dump = torch.load(os.path.join(experiment_path, "saved.pth"),
-                          map_location="cpu")
-        model = dump["model"]
-        # Some scaler (sklearn standardscaler)
-        scaler = dump["scaler"]
-        # Also load previous training config
-        config = dump["config"]
-        vocabulary = torch.load(config["vocab_file"])
-        zh = config["zh"]
-        model = model.to(self.device)
-        dataset = SJTUDatasetEval(
-            kaldi_stream=kaldi_stream,
-            transform=scaler.transform)
-        dataloader = torch.utils.data.DataLoader(
-            dataset,
-            shuffle=False,
-            collate_fn=collate_fn((1,)),
-            batch_size=16,
-            num_workers=0)
-
-        if max_length is None:
-            max_length = model.max_length
-        width_length = max_length * 4
-        pbar = ProgressBar(persist=False, ascii=True)
-        writer = open(os.path.join(experiment_path, output), "w")
-        writer.write(
-            tp.header(
-                ["InputUtterance", "Output Sentence"], width=[len("InputUtterance"), width_length]))
-        writer.write('\n')
-
-        sentences = []
-        def _sample(engine, batch):
-            # batch: [keys, feats, feat_lens]
-            with torch.no_grad():
-                model.eval()
-                keys = batch[0]
-                output = self._forward(model, batch, mode="sample",
-                                        max_length=max_length, **kwargs)
-                seqs = output["seqs"].cpu().numpy()
-                for idx, seq in enumerate(seqs):
-                    caption = self._convert_idx2sentence(seq, vocabulary, zh=zh)
-                    if isinstance(caption, list):
-                        sentence = " ".join(caption)
-                    writer.write(tp.row([keys[idx], sentence], width=[len("InputUtterance"), width_length]) + "\n")
-                    sentences.append(sentence)
-
-        sample_engine = Engine(_sample)
-        pbar.attach(sample_engine)
-        sample_engine.run(dataloader)
-        writer.write(tp.bottom(2, width=[len("InputUtterance"), width_length]) + "\n")
-        writer.write("Unique sentence number: {}\n".format(len(set(sentences))))
-        writer.close()
-
     def predict_evaluate(self,
                          experiment_path: str,
                          feature_file: str,
@@ -251,7 +189,10 @@ class BaseRunner(object):
                 "tokens": pred[0] if zh else pred[0].split() 
             })
         pred_df = pd.DataFrame(pred_df)
-        pred_df.to_json(os.path.join(experiment_path, caption_output))
+        if caption_output.endswith("json"):
+            pred_df.to_json(os.path.join(experiment_path, caption_output))
+        elif caption_output.endswith("csv"):
+            pred_df[["filename", "caption"]].to_csv(os.path.join(experiment_path, caption_output), sep="\t")
 
         if not caption_file:
             return
